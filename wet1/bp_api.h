@@ -18,6 +18,7 @@ typedef struct {
 	unsigned size;		      // Theoretical allocated BTB and branch predictor size
 } SIM_stats;
 
+
 /*************************************************************************/
 /* The following functions should be implemented in your bp.c (or .cpp) */
 /*************************************************************************/

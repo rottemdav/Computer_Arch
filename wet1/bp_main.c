@@ -34,6 +34,8 @@ int main(int argc, char **argv) {
 		elemnts[i] = strtok(NULL, " \n");
 	}
 
+
+    //updating parameters
 	int btbSize = strtoul(elemnts[0], NULL, 0);
 	int historySize = strtoul(elemnts[1], NULL, 0);
 	int tagSize = strtoul(elemnts[2], NULL, 0);
@@ -42,6 +44,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Error in input file: cannot read config\n");
 		exit(4);
 	}
+
 	bool isGlobalHist;
 	if (strcmp(elemnts[4], "local_history") == 0) {
 		isGlobalHist = false;
@@ -51,6 +54,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Error in input file: cannot read config\n");
 		exit(5);
 	}
+
 	bool isGlobalTable;
 	if (strcmp(elemnts[5], "local_tables") == 0) {
 		isGlobalTable = false;
@@ -60,6 +64,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Error in input file: cannot read config\n");
 		exit(6);
 	}
+
 	int Shared;
 	if (strcmp(elemnts[6], "using_share_lsb") == 0) {
 		Shared = 1;
@@ -72,6 +77,7 @@ int main(int argc, char **argv) {
 		exit(7);
 	}
 
+    // need to implement BP_init
 	if (BP_init(btbSize, historySize, tagSize,fsmState, isGlobalHist,
 			isGlobalTable, Shared) < 0) {
 		fprintf(stderr, "Predictor init failed\n");
@@ -101,14 +107,16 @@ int main(int argc, char **argv) {
 		}
 		uint32_t dst = 0;
 		printf("0x%x ", pc);
+        // need to implement BP_predict
 		printf("%c ", (BP_predict(pc, &dst)? 'T' : 'N'));
 		printf("0x%x\n", dst);
 
-
+        // need to implement BP_update
 		BP_update(pc, targetPc, taken, dst);
 	}
 
 	SIM_stats stats;
+    // BP/getstats
 	BP_GetStats(&stats);
 	printf("flush_num: %d, br_num: %d, size: %db\n", stats.flush_num, stats.br_num, stats.size);
 
