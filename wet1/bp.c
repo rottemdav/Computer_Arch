@@ -328,7 +328,9 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
             new_state--;
         }
         
-        int hist_register = 0 + (int)taken; //index to machine
+        //Amit: needed to change here! to old hist register...
+        //int hist_register = 0 + (int)taken; //index to machine 
+        int hist_register = 0;
         btb_table->hist_array[extc_index] = 0 + (int)taken; //update local hist
         //restart machine to start state
 
@@ -343,7 +345,10 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
     else if(btb_table->type == LHGT){
       // no need to restart machine to fsm cause it's global, just need to update it & restart history
       // add Shared logic cause of global machine
-        int hist_register = 0 + (int)taken;
+
+       //Amit: needed to change here! to old hist register...
+       //int hist_register = 0 + (int)taken;
+        int hist_register = 0;
 
         int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
         hist_register = new_hist_register; //changing the hist_register to contain the xor result
@@ -360,7 +365,9 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
     // H:G , T:L
     else if(btb_table->type == GHLT){
     // no need to restart global history, just update it. need to restart and update machine.
-        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; //update global hist
+
+        //Amit: needed to change here! to old hist register...
+        //btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; //update global hist
 
         int fsmstate = btb_table->fsmstate; //restart state of the machine
         int new_state = fsmstate;
@@ -371,7 +378,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
             new_state--;
         }
 
-        int hist_register = (int)btb_table->hist_array[0]; //index to machine table
+        int hist_register = (int)btb_table->hist_array[0]; //index to machine table, before updating history
 
         //restart machine to start state
         
@@ -383,13 +390,19 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
 
         // update machine in enter history to new_state
         btb_table->states_machine[extc_index][hist_register] = new_state;
+
+        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; //update history
+
     }
      // H:G, T:G
     else {
         // no need to restart global history, just update it
         // no need to restart global machine, just update it.
         // using shared logic
-        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; // updated global hist
+        
+        //Amit: needed to change here! to old hist register...
+
+        //btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; // updated global hist
         int hist_register = (int)btb_table->hist_array[0]; 
 
         int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
@@ -401,7 +414,9 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         } else if(!taken && btb_table->states_machine[0][hist_register] != SNT){
            btb_table->states_machine[0][hist_register]--;
         }
-        }    
+        }
+
+        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; // updated global hist   
 
 }
 
