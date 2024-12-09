@@ -84,12 +84,16 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
         return -1;
     }
     //maybe we need to add more checks
-    memset(btb_table->btb_array, 0, sizeof(btb_table->btb_array));
-    memset(btb_table->is_loc, 0, sizeof(btb_table->is_loc));
-    memset(btb_table->dest_target, 0, sizeof(btb_table->dest_target));
-    memset(btb_table->hist_array, 0, sizeof(btb_table->hist_array));
+    // memset(btb_table->btb_array, 0, sizeof(btb_table->btb_array));
+    // memset(btb_table->is_loc, 0, sizeof(btb_table->is_loc));
+    // memset(btb_table->dest_target, 0, sizeof(btb_table->dest_target));
+    // memset(btb_table->hist_array, 0, sizeof(btb_table->hist_array));
 
     for (int i = 0 ; i < MAX_SIZE; i++) {
+        btb_table->btb_array[i] = 0;
+        btb_table->is_loc[i] = 0;
+        btb_table->dest_target[i] = 0;
+        btb_table->hist_array[i] = 0;
         for (int j = 0; j < MAX_MACHINE; j++ ) {
             btb_table->states_machine[i][j] = fsmState;
         }
@@ -327,7 +331,11 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         int hist_register = 0 + (int)taken; //index to machine
         btb_table->hist_array[extc_index] = 0 + (int)taken; //update local hist
         //restart machine to start state
-        memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
+
+        //memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
+        for(int j=0; j<MAX_MACHINE; j++){
+            btb_table->states_machine[extc_index][j] = fsmstate;
+        }
         // update machine in index history to new_state
         btb_table->states_machine[extc_index][hist_register] = new_state;
         }
@@ -366,7 +374,13 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         int hist_register = (int)btb_table->hist_array[0]; //index to machine table
 
         //restart machine to start state
-        memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
+        
+        //memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
+
+        for(int j=0; j<MAX_MACHINE; j++){
+            btb_table->states_machine[extc_index][j] = fsmstate;
+        }
+
         // update machine in enter history to new_state
         btb_table->states_machine[extc_index][hist_register] = new_state;
     }
