@@ -2,6 +2,10 @@
 /* This file should hold your implementation of the predictor simulator */
 
 #include "bp_api.h"
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
 #define MAX_SIZE 32 //max number of lines in the table
 #define MAX_MACHINE 256 //max number of machines (if history size is 8 bits)
 
@@ -20,13 +24,20 @@ enum Types {
     GHGT = 3
 };
 
+int chech_flush(uint32_t targetPc, bool taken, uint32_t pred_dst);
+int BP_pref(bool global_hist, bool global_table);
+void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc);
+void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc);
+char shared_index(uint32_t pc, char hist_register);
+
 //struct that holds btb table
 typedef struct {
     int btb_array[MAX_SIZE]; // array of the instruction tags
     int is_loc[MAX_SIZE]; // indicator if the row of the table is occupied (made for cases where tag=0)
     unsigned dest_target[MAX_SIZE]; //array of dest targets of PC
     char hist_array[MAX_SIZE]; // 32 bytes array, occupies local history or global (in index 0)
-    int** states_machine[MAX_SIZE]; //array of pointers to machines, each machine is a counter counts from 0 to 3
+    //int* states_machine[MAX_SIZE]; //array of pointers to machines, each machine is a counter counts from 0 to 3
+    int states_machine[MAX_SIZE][MAX_MACHINE];
     char fsmstate; //initial state of the machine
     unsigned historysize; //size of history in bytes. affect number of machines.
     unsigned tagsize; // size of tag in bytes
@@ -38,7 +49,7 @@ typedef struct {
     int branch_num;
     int flush_num;
     unsigned btbSize;
-} BTB_table;
+    } BTB_table;
 
 
 //declare the global variable btb_table
@@ -78,20 +89,10 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     memset(btb_table->dest_target, 0, sizeof(btb_table->dest_target));
     memset(btb_table->hist_array, 0, sizeof(btb_table->hist_array));
 
-    
-    // Allocate memory for the state machines
-    for (int i = 0; i < MAX_SIZE; i++) {
-        btb_table->states_machine[i] = (int*)malloc(MAX_MACHINE * sizeof(int));
-        if (!btb_table->states_machine[i]) {
-            // Free previously allocated state machine arrays
-            for (int j = 0; j < i; j++) {
-                free(btb_table->states_machine[j]);
-            }
-            free(btb_table); // Free the BTB table itself
-            return -1; // Memory allocation failure
+    for (int i = 0 ; i < MAX_SIZE; i++) {
+        for (int j = 0; j < MAX_MACHINE; j++ ) {
+            btb_table->states_machine[i][j] = fsmState;
         }
-    // Initialize the allocated memory with fsmState
-    memset(btb_table->states_machine[i], fsmState, MAX_MACHINE);
     }
 
     btb_table->fsmstate = fsmState;
@@ -118,7 +119,7 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
     int extc_tag = tag_mask & pc; 
 
     // H:L , T:G
-    char hist_register = btb_table->hist_array[extc_index];
+    int hist_register = (int)btb_table->hist_array[extc_index];
     int* pc_state_machine = btb_table->states_machine[extc_index]; 
 
     //choosing right indexes for the history and tables
@@ -136,12 +137,11 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
 
     // here is the shared logic (lsb / mid, pc xor history) (only if needed)
     // if we don't use share, return hist_register passed to function
-    int new_hist_register = shared_index(pc, hist_register); //finding the index after hashing
+    int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
     hist_register = new_hist_register; //changing the hist_register to contain the xor result
 
     //here is where we're predicting
-    if(btb_table->is_loc[extc_index]) { 
-        if (btb_table->btb_array[extc_index] == extc_tag) { //tag of PC is in the BTB. predict.
+    if( (btb_table->is_loc[extc_index]) && (btb_table->btb_array[extc_index] == extc_tag) ) { //tag of PC is in the BTB. predict.
             if(((pc_state_machine[hist_register]) == SNT)||
              ((pc_state_machine[hist_register]) == WNT)){
                 *dst = pc+4;
@@ -151,7 +151,6 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
                 *dst = btb_table->dest_target[extc_index];
                 return true; //predict branch taken
             }
-        }
     } else {
         //PC is not in the BTB, predict branch not taken
         *dst = pc+4;
@@ -168,17 +167,15 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     int index_mask = ( (1 << btb_table->index_size) - 1) << 2; // 0x00000001 -> 0x00001100
     int extc_index = index_mask & pc;
 
-    int tag_mask = ( ( 1 << btb_table->tagsize) - 1) << 2+btb_table->index_size; //0x00000001 -> 0x01110000 
+    int tag_mask = ( ( 1 << btb_table->tagsize) - 1) << (2+btb_table->index_size); //0x00000001 -> 0x01110000 
     int extc_tag = tag_mask & pc;
 
     btb_table->branch_num += 1; // sum the new branch to branch counter
     btb_table->flush_num += chech_flush(targetPc, taken, pred_dst);
 
-    if (btb_table->is_loc[extc_index]) { 
-        if (btb_table->btb_array[extc_index] == extc_tag) { // pc is in the BTB table
+    if ( (btb_table->is_loc[extc_index]) && (btb_table->btb_array[extc_index] == extc_tag) ) { // pc is in the BTB table
             // updates the machine and the history, depends if its local / global
             PC_exist_update_machine_history(extc_index, taken, pc);
-        }
     } else { 
         // pc not in BTB, need to add it to table & update machine and history
         btb_table->btb_array[extc_index] = extc_tag; //insert the pc to table in correct index
@@ -192,29 +189,28 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 void BP_GetStats(SIM_stats *curStats){
 	curStats->flush_num = btb_table->flush_num;
+    printf("!------1--------\n");
     curStats->br_num = btb_table->branch_num;
+    printf("!------2--------\n");
+
     //Amit: not sure about the sizes here, and where should we add the valid bit
     if (btb_table->type == LHLT){
-        curStats->size = (btb_table->btbSize)*(1+btb_table->tagsize+btb_table->historysize + 2*(2 << btb_table->historysize));
+        curStats->size = (btb_table->btbSize)*(1+btb_table->tagsize+btb_table->historysize + 2*(2 << (btb_table->historysize)));
+            printf("!------3--------\n");
     }
     else if (btb_table->type == LHGT) {
         curStats->size = (btb_table->btbSize)*(1+btb_table->tagsize+btb_table->historysize) + 2*(2 << btb_table->historysize);
     } else if (btb_table->type == GHLT ) {
         curStats->size = btb_table->historysize + (btb_table->btbSize)*(2*(2 << btb_table->historysize));
     } else if (btb_table->type == GHGT) {
+        printf("!------4--------\n");
         curStats->size = btb_table->historysize + (2*(2 << btb_table->historysize));
+        printf("!------5--------\n");
     }
-
-    // Free dynamically allocated memory
-    for (int i = 0; i < MAX_SIZE; i++) {
-        if (btb_table->states_machine[i] != NULL) {
-            free(btb_table->states_machine[i]); // Free each allocated state machine
-            btb_table->states_machine[i] = NULL; // Avoid dangling pointers
-        }
-    }
-
+    printf("!------before free btb_table--------\n");
     free(btb_table); // Free the BTB table itself
-    btb_table = NULL; // Avoid dangling pointer
+    printf("!------after free btb_table--------\n");
+    //btb_table = NULL; // Avoid dangling pointer
 
     return;
 }
@@ -253,7 +249,7 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
     // This function is for updating history and machines, if the pc is in the table, based on Type
     // H:L , T:L
     if(btb_table->type == LHLT){
-        char hist_register = btb_table->hist_array[extc_index];
+        int hist_register = (int)btb_table->hist_array[extc_index];
         int* pc_state_machine = btb_table->states_machine[extc_index];
 
         if (taken && (pc_state_machine[hist_register]) != ST) {//update machine
@@ -267,11 +263,11 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
     }
     // H:L , T:G
      else if(btb_table->type == LHGT){
-        char hist_register = btb_table->hist_array[extc_index];
+        int hist_register = (int)btb_table->hist_array[extc_index];
         int* pc_state_machine = btb_table->states_machine[0]; //reffering to global machine
 
         // shared logic - to choose right index for the global machine
-        char new_hist_register = shared_index(pc, hist_register); //finding the index after hashing
+        char new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
         hist_register = new_hist_register; //changing the hist_register to contain the xor result
 
         if (taken && (pc_state_machine[hist_register]) != ST) {//update global machine
@@ -284,7 +280,7 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
     }
  // H:G , T:L
     else if(btb_table->type == GHLT){
-        char hist_register = btb_table->hist_array[0];
+        int hist_register = (int)btb_table->hist_array[0];
         int* pc_state_machine = btb_table->states_machine[extc_index];
 
         if (taken && (pc_state_machine[hist_register]) != ST) {//update local machine
@@ -296,11 +292,11 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
         btb_table->hist_array[0] = (hist_register << 1) + (int)taken; //update global history
     }
     else { // H:G, T:G
-        char hist_register = btb_table->hist_array[0];
+        int hist_register = (int)btb_table->hist_array[0];
         int* pc_state_machine = btb_table->states_machine[0];
 
         // shared logic - to choose right index for the global machine
-        char new_hist_register = shared_index(pc, hist_register); //finding the index after hashing
+        int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
         hist_register = new_hist_register; //changing the hist_register to contain the xor result
 
         if (taken && (pc_state_machine[hist_register]) != ST) {//update global machine
@@ -328,7 +324,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
             new_state--;
         }
         
-        char hist_register = 0 + (int)taken; //index to machine
+        int hist_register = 0 + (int)taken; //index to machine
         btb_table->hist_array[extc_index] = 0 + (int)taken; //update local hist
         //restart machine to start state
         memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
@@ -339,9 +335,9 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
     else if(btb_table->type == LHGT){
       // no need to restart machine to fsm cause it's global, just need to update it & restart history
       // add Shared logic cause of global machine
-        char hist_register = 0 + (int)taken;
+        int hist_register = 0 + (int)taken;
 
-        char new_hist_register = shared_index(pc, hist_register); //finding the index after hashing
+        int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
         hist_register = new_hist_register; //changing the hist_register to contain the xor result
         // update global machine
         if(taken && btb_table->states_machine[0][hist_register] != ST){
@@ -367,7 +363,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
             new_state--;
         }
 
-        char hist_register = btb_table->hist_array[0]; //index to machine table
+        int hist_register = (int)btb_table->hist_array[0]; //index to machine table
 
         //restart machine to start state
         memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
@@ -380,9 +376,9 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         // no need to restart global machine, just update it.
         // using shared logic
         btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; // updated global hist
-        char hist_register = btb_table->hist_array[0]; 
+        int hist_register = (int)btb_table->hist_array[0]; 
 
-        char new_hist_register = shared_index(pc, hist_register); //finding the index after hashing
+        int new_hist_register = (int)shared_index(pc, hist_register); //finding the index after hashing
         hist_register = new_hist_register; //changing the hist_register to contain the xor result
 
         // update global machine
