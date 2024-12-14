@@ -40,6 +40,7 @@ typedef struct {
     int states_machine[MAX_SIZE][MAX_MACHINE];
     char fsmstate; //initial state of the machine
     unsigned historysize; //size of history in bytes. affect number of machines.
+    unsigned history_mask; // the maximum number in binary mask
     unsigned tagsize; // size of tag in bytes
     bool global_hist; //true if global history
     bool global_table; //true if global table
@@ -69,6 +70,11 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     if (btbSize > MAX_SIZE || btbSize == 0) {
         return -1; // Invalid size
     }
+
+    if (historySize > 8 || historySize < 1) {
+        return -1; //invalid history size
+    }
+
     // assign the size
     if (1==btbSize || 2==btbSize){
         btb_table->index_size = 1;
@@ -83,11 +89,18 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     } else { // invalid btbSize
         return -1;
     }
-    //maybe we need to add more checks
-    // memset(btb_table->btb_array, 0, sizeof(btb_table->btb_array));
-    // memset(btb_table->is_loc, 0, sizeof(btb_table->is_loc));
-    // memset(btb_table->dest_target, 0, sizeof(btb_table->dest_target));
-    // memset(btb_table->hist_array, 0, sizeof(btb_table->hist_array));
+
+    if (tagSize < 0 || tagSize > (30 - btb_table->index_size) ) {
+        return -1 ; // invalid tag size
+    }
+
+    if(fsmState < 0 || fsmState > 3) { // 0,1,2,3
+        return -1; //invalid fsm size
+    }
+
+    if ((Shared != 0) && !isGlobalTable) {
+        return -1; // share with local table
+    }
 
     for (int i = 0 ; i < MAX_SIZE; i++) {
         btb_table->btb_array[i] = 0;
@@ -101,6 +114,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
 
     btb_table->fsmstate = fsmState;
     btb_table->historysize = historySize;
+    btb_table->history_mask = (1 << historySize) - 1; // 1 --> 100 --> 011
     btb_table->tagsize = tagSize;
     btb_table->global_hist = isGlobalHist;
     btb_table->global_table = isGlobalTable;
@@ -193,27 +207,25 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
 
 void BP_GetStats(SIM_stats *curStats){
 	curStats->flush_num = btb_table->flush_num;
-    printf("!------1--------\n");
     curStats->br_num = btb_table->branch_num;
-    printf("!------2--------\n");
 
     //Amit: not sure about the sizes here, and where should we add the valid bit
+    
+
     if (btb_table->type == LHLT){
-        curStats->size = (btb_table->btbSize)*(1+btb_table->tagsize+btb_table->historysize + 2*(2 << (btb_table->historysize)));
-            printf("!------3--------\n");
+                //(number of lines in table) * ((valid + tag size + target size + hist_reg size) + (FSM bits num * local FSM num))
+        curStats->size = (btb_table->btbSize)*((31+btb_table->tagsize+btb_table->historysize) + 2*(1 << (btb_table->historysize)));
     }
     else if (btb_table->type == LHGT) {
-        curStats->size = (btb_table->btbSize)*(1+btb_table->tagsize+btb_table->historysize) + 2*(2 << btb_table->historysize);
+        curStats->size = (btb_table->btbSize) * (31+btb_table->tagsize+btb_table->historysize) + 2*(1 << btb_table->historysize);
     } else if (btb_table->type == GHLT ) {
-        curStats->size = btb_table->historysize + (btb_table->btbSize)*(2*(2 << btb_table->historysize));
+        curStats->size = (btb_table->btbSize) * ( (31+btb_table->tagsize)  + (2*(1 << btb_table->historysize)) ) + btb_table->historysize;
     } else if (btb_table->type == GHGT) {
-        printf("!------4--------\n");
-        curStats->size = btb_table->historysize + (2*(2 << btb_table->historysize));
-        printf("!------5--------\n");
+        curStats->size = (btb_table->btbSize) * ((31+btb_table->tagsize)) + btb_table->historysize + (2*(1 << btb_table->historysize));
     }
-    printf("!------before free btb_table--------\n");
+    
     free(btb_table); // Free the BTB table itself
-    printf("!------after free btb_table--------\n");
+    
     //btb_table = NULL; // Avoid dangling pointer
 
     return;
@@ -263,7 +275,9 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
             btb_table->states_machine[extc_index][hist_register]-- ;
         }
 
-        btb_table->hist_array[extc_index] = (hist_register << 1) + (int)taken; //update history
+        
+        btb_table->hist_array[extc_index] = ((hist_register << 1) + (int)taken) & btb_table->history_mask; //update history
+        // 11 --> 110 --> 110 & 000..0011 --> 010 --> 00...00010
     }
     // H:L , T:G
      else if(btb_table->type == LHGT){
@@ -280,7 +294,7 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
         else if(!taken && (pc_state_machine[hist_register]) != SNT){
             btb_table->states_machine[0][hist_register]-- ;
         }
-        btb_table->hist_array[extc_index] = (hist_register << 1) + (int)taken; //update local history of pc
+        btb_table->hist_array[extc_index] =  ((hist_register << 1) + (int)taken) & btb_table->history_mask; //update local history of pc
     }
  // H:G , T:L
     else if(btb_table->type == GHLT){
@@ -293,7 +307,9 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
         else if(!taken && (pc_state_machine[hist_register]) != SNT){
             btb_table->states_machine[extc_index][hist_register]-- ;
         }
-        btb_table->hist_array[0] = (hist_register << 1) + (int)taken; //update global history
+        if (btb_table->hist_array[0] == btb_table->historysize) {
+        btb_table->hist_array[0] =  ((hist_register << 1) + (int)taken) & btb_table->history_mask; //update global history
+        }
     }
     else { // H:G, T:G
         int hist_register = (int)btb_table->hist_array[0];
@@ -309,7 +325,7 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
         else if(!taken && (pc_state_machine[hist_register]) != SNT){
             btb_table->states_machine[0][hist_register]-- ;
         }
-        btb_table->hist_array[0] = (hist_register << 1) + (int)taken; //update global history
+        btb_table->hist_array[0] =  ((hist_register << 1) + (int)taken) & btb_table->history_mask; //update global history
         }
 }
 
@@ -331,7 +347,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         //Amit: needed to change here! to old hist register...
         //int hist_register = 0 + (int)taken; //index to machine 
         int hist_register = 0;
-        btb_table->hist_array[extc_index] = 0 + (int)taken; //update local hist
+        btb_table->hist_array[extc_index] = (0 + (int)taken) & btb_table->history_mask; //update local hist
         //restart machine to start state
 
         //memset(btb_table->states_machine[extc_index], fsmstate, MAX_MACHINE); 
@@ -359,7 +375,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
            btb_table->states_machine[0][hist_register]--;
         }
 
-        btb_table->hist_array[extc_index] = 0 + (int)taken; //update local hist
+        btb_table->hist_array[extc_index] = (0 + (int)taken) & btb_table->history_mask; //update local hist
 
     }
     // H:G , T:L
@@ -391,7 +407,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         // update machine in enter history to new_state
         btb_table->states_machine[extc_index][hist_register] = new_state;
 
-        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; //update history
+        btb_table->hist_array[0] = ((btb_table->hist_array[0] << 1) + (int)taken) & btb_table->history_mask; //update history
 
     }
      // H:G, T:G
@@ -416,7 +432,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
         }
         }
 
-        btb_table->hist_array[0] = (btb_table->hist_array[0] << 1) + (int)taken; // updated global hist   
+        btb_table->hist_array[0] = ((btb_table->hist_array[0] << 1) + (int)taken) & btb_table->history_mask; // updated global hist   
 
 }
 
