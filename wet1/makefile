@@ -4,7 +4,7 @@
 all: bp_main
 
 # Environment for C 
-CC = gcc
+CC = gcc -Wall -g
 CFLAGS = -std=c99 -Wall
 
 # Environment for C++ 
