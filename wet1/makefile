@@ -13,7 +13,7 @@ CXXFLAGS = -std=c++11 -Wall
 
 # Automatically detect whether the bp is C or C++
 # Must have either bp.c or bp.cpp - NOT both
-SRC_BP = $(wildcard bp.c bp.cpp)
+SRC_BP = $(wildcard bp1.c bp.cpp)
 SRC_GIVEN = bp_main.c
 EXTRA_DEPS = bp_api.h
 
@@ -24,11 +24,11 @@ OBJ = $(OBJ_GIVEN) $(OBJ_BP)
 #$(info OBJ=$(OBJ))
 
 
-ifeq ($(SRC_BP),bp.c)
+ifeq ($(SRC_BP),bp1.c)
 bp_main: $(OBJ)
 	$(CC)  -o $@ $(OBJ) -lm
 
-bp.o: bp.c
+bp.o: bp1.c
 	$(CC) -c $(CFLAGS)  -o $@ $^ -lm
 
 else
