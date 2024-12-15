@@ -24,7 +24,7 @@ enum Types {
     GHGT = 3
 };
 
-int check_flush(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
+int chech_flush(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
 int BP_pref(bool global_hist, bool global_table);
 void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc);
 void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc);
@@ -90,7 +90,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
         return -1;
     }
 
-    if (tagSize < 0 || tagSize > (30 - btb_table->index_size) ) {
+    if (tagSize < 0 || tagSize > (31 - btb_table->index_size) ) {
         return -1 ; // invalid tag size
     }
 
@@ -159,12 +159,12 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
     hist_register = new_hist_register; //changing the hist_register to contain the xor result
 
     //here is where we're predicting
-    printf("extc tag: %d, extac index : %d\n",extc_tag, extc_index);
-    printf("fsm state: %d\n", pc_state_machine[hist_register]);
+    //printf("extc tag: %d, extac index : %d\n",extc_tag, extc_index);
+    //printf("fsm state: %d\n", pc_state_machine[hist_register]);
     if( (btb_table->is_loc[extc_index]) && (btb_table->btb_array[extc_index] == extc_tag) ) { //tag of PC is in the BTB. predict.
             if(((pc_state_machine[hist_register]) == SNT)||
              ((pc_state_machine[hist_register]) == WNT)){
-                printf("fsm state: %d\n", pc_state_machine[hist_register]);
+                //printf("fsm state: %d\n", pc_state_machine[hist_register]);
                 *dst = pc+4;
                 //printf("\n+4 dest: %04x\n", *dst);
                 return false; //predict branch not taken        
@@ -177,7 +177,7 @@ bool BP_predict(uint32_t pc, uint32_t *dst){
     } else {
         //PC is not in the BTB, predict branch not taken
         *dst = pc+4;
-        printf("\nnew +4 dest: %04x\n", *dst);
+//        printf("\nnew +4 dest: %04x\n", *dst);
         return false;
         
     }	
@@ -195,10 +195,11 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
     int tag_mask = ( ( 1 << btb_table->tagsize) - 1) << (2+btb_table->index_size); //0x00000001 -> 0x01110000 
     int extc_tag = (tag_mask & pc) >> (btb_table->index_size + 2); 
 
+//   printf("tag: %d, index: %d, pc: %d, targetPC: %d, pred_dst: %d\n", extc_tag, extc_index, pc, targetPc, pred_dst);
     if ( (btb_table->is_loc[extc_index]) && (btb_table->btb_array[extc_index] == extc_tag) ) { // pc is in the BTB table
             // updates the machine and the history, depends if its local / global
-            btb_table->dest_target[extc_index] = targetPc;
-            PC_exist_update_machine_history(extc_index, taken, pc);
+	btb_table->dest_target[extc_index] = targetPc;            
+	PC_exist_update_machine_history(extc_index, taken, pc);
     } else { 
         // pc not in BTB, need to add it to table & update machine and history
         btb_table->btb_array[extc_index] = extc_tag; //insert the pc to table in correct index
@@ -207,8 +208,11 @@ void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
         PC_new_update_machine_history(extc_index, taken, pc);
     }
 
+
     btb_table->branch_num += 1; // sum the new branch to branch counter
     btb_table->flush_num += chech_flush(pc, targetPc, taken, pred_dst);
+
+//    printf("branch_num: %d, flush_num: %d\n", btb_table->branch_num, btb_table->flush_num);
 	return;
 }
 
@@ -239,32 +243,30 @@ void BP_GetStats(SIM_stats *curStats){
     return;
 }
 
-int check_flush(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
-    // Possible situations:
-    // 1. Branch taken: targetPc == pred_dst -> no flush
-    // 2. Branch taken: targetPc != pred_dst -> flush
-    // 3. Branch not taken: targetPc == pred_dst -> flush 
-    //    (Remember! targetPc = branch pc, even if NT)
-    // 4. Branch not taken: targetPc != pred_dst -> no flush
+int chech_flush(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst){
+    // possible situations:
+    // 1. branch taken. targetPc == pred_dst -> no flush
+    // 2. branch taken. tragetPc != pred_dst -> flush
+    // 3. branch not taken. targetPc == pred_dst -> flush (remmember! targetPc = branch pc, even if NT)
+    // 4. branch not taken. targetPc != pred_dst -> no flush
 
     uint32_t pc4 = pc + 4; // Address of the next instruction (pc + 4)
 
-    // Case 1: Pc is not in table ("liar PC")
+	// Case 1: Pc is not in table ("liar PC")
     if ((targetPc != pred_dst) && (pc4 != pred_dst)) {
         // Flush if branch is taken or if branch not taken and pc4 != pred_dst
         return taken || (!taken && (pc4 != pred_dst));
     }
 
     // Case 2: Pc is in table ("good PC")
-    if (taken) {
-        // Flush if targetPc != pred_dst
+
+    if(taken){
         return (targetPc != pred_dst);
-    } else {
-        // Flush if targetPc == pred_dst (branch not taken)
+    }
+    else{ //branch not taken
         return (targetPc == pred_dst);
     }
 }
-
 
 int BP_pref(bool global_hist, bool global_table) {
     int ret_value= GHGT; //GHGT
@@ -319,7 +321,10 @@ void PC_exist_update_machine_history(int extc_index, bool taken, uint32_t pc){
         }
         btb_table->hist_array[extc_index] =  ((hist_register << 1) + (int)taken) & btb_table->history_mask; //update local history of pc
 
-        printf("new fm: %d   ,new history register:%d\n", btb_table->states_machine[0][hist_register] , btb_table->hist_array[extc_index]);
+	//printf("a: %d\n", a);
+	//printf("b: %d\n", b);
+	//printf("c: %d\n", c);
+        //printf("new fm: %d   ,new history register:%d\n", btb_table->states_machine[0][hist_register] , btb_table->hist_array[extc_index]);
 
 
     }
@@ -416,7 +421,7 @@ void PC_new_update_machine_history(int extc_index, bool taken, uint32_t pc){
 
         btb_table->hist_array[extc_index] = (0 + (int)taken) & (btb_table->history_mask); //update local hist
 
-        printf("new fm: %d   ,new history register:%d\n", btb_table->states_machine[0][hist_register] , btb_table->hist_array[extc_index]);
+//        printf("new fm: %d   ,new history register:%d\n", btb_table->states_machine[0][hist_register] , btb_table->hist_array[extc_index]);
 
     }
     // H:G , T:L
@@ -500,8 +505,8 @@ int shared_index(uint32_t pc, int hist_register){
         int pc_bits = (pc >> 16) ; //bitwize and between pc and mid mask
         int new_hist_register = (pc_bits ^ (int)hist_register) & (btb_table->history_mask); //this is a new index to the machine table
 
-        printf("history_mask: %d\n", btb_table->history_mask);
-        printf("pc_bits %d,    new_hist_register: %d,     old hist register: %d\n",pc_bits,new_hist_register, hist_register  );
+        //printf("history_mask: %d\n", btb_table->history_mask);
+        //printf("pc_bits %d,    new_hist_register: %d,     old hist register: %d\n",pc_bits,new_hist_register, hist_register  );
 
         return new_hist_register; 
     }
