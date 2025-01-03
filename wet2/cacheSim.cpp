@@ -115,17 +115,33 @@ int main(int argc, char **argv) {
 		cout << " (dec) " << num << endl;*/
 
 		/* creates address class with parsed data */
-		Address(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
+		Address new_addr(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
 
 		/* checks if the address exists in any way in L1 */
+		if (address_exists(L1, new_addr, 1) == 1) {
+			/* if exists in L1 - operate by R or W and calculate */
+			if (operation == 'R') { // the access is with read, return hit
+				
+			} else if (operation == 'W') { // the access is with write, need to consider if write-allocate or NO-write-allocate
 
-		/* if exists in L1 - operate by R or W and calculate */
+		}
+		// the address was not found - assign miss and write the address to the matching place in the way array
+		} else {
+
+		}
 
 		/* if not exists in L1 -> check if exists in L2 */
+		if (address_exists(L2, new_addr, 2)) {
+			/* if exists in L2 - operate by R or W and calculate */
+			if (operation == 'R') {
 
-		/* if exists in L2 - operate by R or W and calculate */
+			} else if (operation == 'W') {
 
-		
+			}
+
+		} else {
+			
+		}
 
 	}
 
