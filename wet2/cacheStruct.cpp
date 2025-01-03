@@ -20,13 +20,7 @@ class Address {
     bool in_l2;
 
     public:
-    //Constructor -- change this
-    Address(string address, string offset, string set, string tag,
-            int l1_counter, int l2_counter, bool in_l1, bool in_l2) : 
-            full_address(address), offset(offset), set(set), tag(tag),
-            last_seen_l1(l1_counter), last_seen_l2(l2_counter), in_l1(in_l1), in_l2(in_l2) {}
-
-
+    
     // new constructor 
     //Address(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
     Address(int num, int offset_size, int set_size_l1, int set_size_l2, int tag_size_l1,  int tag_size_l2) {
