@@ -2,6 +2,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include "cacheStruct.cpp"
+#include <cmath>
 
 using std::FILE;
 using std::string;
@@ -60,11 +62,38 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	/*Calculating sizes of set, tag, offset*/
+	int lines_in_l1_log = L1Size - BSize;
+	int lines_in_l2_log = L2Size - BSize;
+
+	int set_size_l1 = lines_in_l1_log - L1Assoc;
+	int set_size_l2 = lines_in_l2_log - L2Assoc;
+
+	int offset_size = BSize;
+
+	int tag_size_l1 = 32-(offset_size + set_size_l1);
+	int tag_size_l2 = 32-(offset_size + set_size_l2);
+
+	int way_num_l1 = pow(2,L1Assoc);
+	int way_num_l2 = pow(2,L2Assoc);
+
+	int way_lines_l1 = pow(2,set_size_l1);
+	int way_lines_l2 = pow(2,set_size_l2);
+
+
+	/* -------------- create cache and ways -----------------*/
+	//   Cache(int blocksize, int wr_alloc, int cashesize, int nways, int way_size) 
+	Cache L1(BSize, WrAlloc, L1Size, way_num_l1 , way_lines_l1);
+	Cache L2(BSize, WrAlloc, L2Size, way_num_l2 , way_lines_l1);
+
+
 	while (getline(file, line)) {
 
 		stringstream ss(line);
 		string address;
 		char operation = 0; // read (R) or write (W)
+
+		// extracting operation from ss to operation and address variables
 		if (!(ss >> operation >> address)) {
 			// Operation appears in an Invalid format
 			cout << "Command Format error" << endl;
@@ -76,16 +105,33 @@ int main(int argc, char **argv) {
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
-		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+		/*// DEBUG - remove this line
+		cout << ", address (hex)" << cutAddress;*/
 
 		unsigned long int num = 0;
 		num = strtoul(cutAddress.c_str(), NULL, 16);
 
-		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
+		/*// DEBUG - remove this line
+		cout << " (dec) " << num << endl;*/
+
+		/* creates address class with parsed data */
+		Address(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
+
+		/* checks if the address exists in any way in L1 */
+
+		/* if exists in L1 - operate by R or W and calculate */
+
+		/* if not exists in L1 -> check if exists in L2 */
+
+		/* if exists in L2 - operate by R or W and calculate */
+
+		
 
 	}
+
+	
+
+	
 
 	double L1MissRate;
 	double L2MissRate;
