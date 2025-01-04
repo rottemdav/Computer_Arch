@@ -34,7 +34,7 @@ public:
         set_L1 = address_in_binary & set_mask_L1;
         set_L2 = address_in_binary & set_mask_L2;
         tag_L1 = address_in_binary & tag_mask_L1;
-        tag_L1 = address_in_binary & tag_mask_L2;
+        tag_L2 = address_in_binary & tag_mask_L2;
 
         //initializing the rest of the class memebers
         last_seen_L1 = 0;
@@ -72,7 +72,7 @@ public:
     int CasheSize;
     int Nways;
     int CounterTime;
-    int Way_Size; /*Number of lines in each way = Number of addresses can be saved*/
+    int Way_Size; /*Number of lines in each way = Number of addresses can be saved in a single way*/
 
     Way** Ways_Arr;
 
@@ -113,34 +113,164 @@ int address_exists(Cache cache, Address address, int cache_level) {
     unsigned int curr_tag;
     unsigned int curr_set;
 
-      if (cache_level == 1) {
+      if (cache_level == 1) {// cache_level==1 means we want to find address in L1
         curr_tag = curr_address->tag_L1;
         curr_set = curr_address->set_L1;
-    } else if (cache_level ==2) {
+    } else if (cache_level ==2) { //
         curr_tag = curr_address->tag_L2;
-        curr_set = curr_address->set_L2; 
+        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
     }
 
-    //gets the matching way based on the set of the address
-    Way* way_it = curr_cache->Ways_Arr[curr_set];
-
-    // loop through the way to find matching address tag
-    for (int i = 0 ; i < curr_cache->Way_Size; i ++) {
-        //if the tag of the address in the way found, return 1
-        if (cache_level == 1) {
-            if (way_it->Address_Arr[i].tag_L1 == curr_tag) {
-                return 1;
-            }
-        }
-
-        if (cache_level == 2) {
-              if (way_it->Address_Arr[i].tag_L2 == curr_tag) {
-                return 1;
-            }
-        }
-       
-    }
+    /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
+        else - return 0,  cause it means the address wasn't found in the cache */ 
     
-    return 0;
+    for (int i=0; i< curr_cache->Nways; i++) {
+        Way* way_it = curr_cache->Ways_Arr[i];
+
+        for (size_t j=0; j<way_it->Address_Arr.size(); j++){
+            //if the tag of the address in the way found, return 1
+            if (cache_level == 1) {
+                if ((way_it->Address_Arr[j].tag_L1 == curr_tag) && (way_it->Address_Arr[j].set_L1 == curr_set) ){
+                    return 1;
+                }
+            }
+
+            if (cache_level == 2) {
+                if ((way_it->Address_Arr[j].tag_L2 == curr_tag) && (way_it->Address_Arr[j].set_L2 == curr_set) ){
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0; //if we got out of outer loop it means address is not in any way of cashe
 }
 
+int find_free_way(Cache cache, Address address, int cache_level){
+    Address* curr_address = address.get_address();
+    Cache* curr_cache = cache.get_cache();
+    unsigned int curr_set;
+
+    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
+        curr_set = curr_address->set_L1;
+    } else if (cache_level ==2) { //
+        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
+    }
+
+    /* iterates through all ways in cache - if there is a free way in the cuur_set index - return the way index in cache. 
+        else - return -1,  which means we need to replace an address in a way the cache */ 
+    
+    for (int i=0; i< curr_cache->Nways; i++) {
+        Way* way_it = curr_cache->Ways_Arr[i];
+        bool found_free_way = true;
+
+        for (size_t j=0; j<way_it->Address_Arr.size(); j++){
+            //if the tag of the address in the way found, return 1
+            if (cache_level == 1) {
+                if(way_it->Address_Arr[j].set_L1 == curr_set){
+                    found_free_way = false;
+                }
+            }
+
+            if (cache_level == 2) {
+               if(way_it->Address_Arr[j].set_L2 == curr_set){
+                    found_free_way = false;
+                }
+            }
+        }
+        if(found_free_way){
+            return i;
+        }
+    }
+    return -1;
+}
+
+void insert_address(Cache cache, Address address, int cache_level, int way_idx){
+    Address* curr_address = address.get_address();
+    Cache* curr_cache = cache.get_cache();
+
+    if (cache_level == 1) {// insert & update times
+        curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
+        curr_cache->CounterTime++;
+        curr_address->in_L1 = true;
+        curr_address->last_seen_L1 = curr_cache->CounterTime;
+    } else if (cache_level ==2) { //
+        curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
+        curr_cache->CounterTime++;
+        curr_address->in_L2 = true;
+        curr_address->last_seen_L2 = curr_cache->CounterTime;
+    }
+}
+
+int remove_address(Cache cache, Address address, int cache_level){
+    // function uses LRU algorithm to remove the address which it's last seen is the smallest
+    // returns the way of the removed address
+
+    Address* curr_address = address.get_address();
+    Cache* curr_cache = cache.get_cache();
+    unsigned int curr_set;
+
+    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
+        curr_set = curr_address->set_L1;
+    } else if (cache_level ==2) { //
+        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
+    }
+
+    /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
+        else - return 0,  cause it means the address wasn't found in the cache */ 
+    int smallest_last_seen = -1;
+    int smallet_way = -1;
+
+    for (int i=0; i< curr_cache->Nways; i++) {
+        Way* way_it = curr_cache->Ways_Arr[i];
+
+        for (size_t j=0; j<way_it->Address_Arr.size(); j++){
+            //if the tag of the address in the way found, return 1
+            if (cache_level == 1) {
+                if (way_it->Address_Arr[j].set_L1 == curr_set){
+                    if (smallest_last_seen == -1){ //first address to check, need to update variables
+                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
+                        smallet_way = i;
+                        break; // cause there is no other address in this way that will have the same set
+                    } else if (way_it->Address_Arr[j].last_seen_L1 < smallest_last_seen){
+                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
+                        smallet_way = i;
+                        break; // cause there is no other address in this way that will have the same set
+                    }
+                }
+            }
+            if (cache_level == 2) {
+                if (way_it->Address_Arr[j].set_L2 == curr_set) {
+                    if (smallest_last_seen == -1){ //first address to check, need to update variables
+                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
+                        smallet_way = i;
+                        break; // cause there is no other address in this way that will have the same set
+                    } else if (way_it->Address_Arr[j].last_seen_L2 < smallest_last_seen){
+                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
+                        smallet_way = i;
+                        break; // cause there is no other address in this way that will have the same set
+                    }
+                }
+            }
+        }
+    }
+
+    // find the right way, now lets remove the address
+
+    if (cache_level == 1) {
+        for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
+            if (it->set_L1 == curr_set) {
+                curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
+                break; // Remove only the first matching element
+            }
+        }
+    } else if (cache_level == 2){
+        for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
+            if (it->set_L2 == curr_set) {
+                curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
+                break; // Remove only the first matching element
+            }
+        }
+    } 
+
+return smallet_way;
+}

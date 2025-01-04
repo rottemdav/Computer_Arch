@@ -63,28 +63,33 @@ int main(int argc, char **argv) {
 	}
 
 	/*Calculating sizes of set, tag, offset*/
-	int lines_in_l1_log = L1Size - BSize;
-	int lines_in_l2_log = L2Size - BSize;
+	int lines_in_l1_log = L1Size - BSize; //number of addresses can be saved in L1 - LOG
+	int lines_in_l2_log = L2Size - BSize; //number of addresses can be saved in L2 - LOG
 
-	int set_size_l1 = lines_in_l1_log - L1Assoc;
-	int set_size_l2 = lines_in_l2_log - L2Assoc;
+	int set_size_l1 = lines_in_l1_log - L1Assoc; 
+	int set_size_l2 = lines_in_l2_log - L2Assoc; 
 
 	int offset_size = BSize;
 
 	int tag_size_l1 = 32-(offset_size + set_size_l1);
 	int tag_size_l2 = 32-(offset_size + set_size_l2);
 
-	int way_num_l1 = pow(2,L1Assoc);
-	int way_num_l2 = pow(2,L2Assoc);
+	int way_num_l1 = pow(2,L1Assoc); //number of ways in L1
+	int way_num_l2 = pow(2,L2Assoc); //number of ways in L2
 
-	int way_lines_l1 = pow(2,set_size_l1);
-	int way_lines_l2 = pow(2,set_size_l2);
+	int way_lines_l1 = pow(2,set_size_l1); //number of addresses can be saved in each way in L1
+	int way_lines_l2 = pow(2,set_size_l2); //number of addresses can be saved in each way in L2
 
 
 	/* -------------- create cache and ways -----------------*/
 	//   Cache(int blocksize, int wr_alloc, int cashesize, int nways, int way_size) 
 	Cache L1(BSize, WrAlloc, L1Size, way_num_l1 , way_lines_l1);
 	Cache L2(BSize, WrAlloc, L2Size, way_num_l2 , way_lines_l1);
+
+	int num_access_L1 = 0;
+	int num_misses_L1 = 0;
+	int num_access_L2 = 0;
+	int num_misses_L2 = 0;
 
 
 	while (getline(file, line)) {
@@ -101,7 +106,7 @@ int main(int argc, char **argv) {
 		}
 
 		// DEBUG - remove this line
-		cout << "operation: " << operation;
+		/*cout << "operation: " << operation;*/
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
@@ -117,41 +122,84 @@ int main(int argc, char **argv) {
 		/* creates address class with parsed data */
 		Address new_addr(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
 
-		/* checks if the address exists in any way in L1 */
+		/* checks if the address exists in the cache */
+		/* 
+		if exist in L1 -> we have a hit. num_access_L1++, break loop (move to other command)
+		if not exist in L1 -> check in L2. num_access_L1++, num_misses_L1++.
+		if exist in L2 -> hit L2. num_eccess_l2++, break loop (move to other command)
+		if not exist in L2 -> miss. num_access_L2++, num_misses_L2++. insert address to the cashe:
+				if operation==R: bring address to L1 and L2.
+				if operation==W: bring address to L1 and L2 only if policy is write allocate
+		*/
 		if (address_exists(L1, new_addr, 1) == 1) {
-			/* if exists in L1 - operate by R or W and calculate */
-			if (operation == 'R') { // the access is with read, return hit
-				
-			} else if (operation == 'W') { // the access is with write, need to consider if write-allocate or NO-write-allocate
-
+			num_access_L1++;
+			break;
 		}
-		// the address was not found - assign miss and write the address to the matching place in the way array
-		} else {
-
+		else if (address_exists(L2, new_addr, 2) == 1) {
+			num_access_L1++;
+			num_misses_L1++;
+			num_access_L2++;
+			break;
 		}
+		else { //miss in both cashes
+			num_access_L1++;
+			num_misses_L1++;
+			num_access_L2++;
+			num_misses_L2++;
 
-		/* if not exists in L1 -> check if exists in L2 */
-		if (address_exists(L2, new_addr, 2)) {
-			/* if exists in L2 - operate by R or W and calculate */
+			// insert address to cache (if needed)
 			if (operation == 'R') {
+				// insert to L1, L2 in a free way, in index set
+				int insert_way_l1 = find_free_way(L1, new_addr, 1);
+				int insert_way_l2 = find_free_way(L2, new_addr, 2);
+				
+				if (insert_way_l1 != -1){ //there is a free way in L1
+					insert_address(L1, new_addr, 1, insert_way_l1);
+				} else {
+					// delete address from L1 by LRU policy, and remmember it's way for new inserting
+					insert_way_l1 = remove_address(L1, new_addr, 1);
+					insert_address(L1, new_addr, 1, insert_way_l1);
+				}
 
+				if (insert_way_l2 != -1){ //there is a free way in L2
+					insert_address(L2, new_addr, 2, insert_way_l2);
+				} else {
+					// delete address from L2 by LRU policy, and remmember it's way for new inserting
+					insert_way_l2 = remove_address(L2, new_addr, 2);
+					insert_address(L2, new_addr, 2, insert_way_l2);
+				}
 			} else if (operation == 'W') {
+				// insert to L1, L2 in a free way, in index set, ONLY if it's in WrAlloc.
+				// IF NO WrAlloc - do nothing.
+				if (WrAlloc == 1){
+					
+				int insert_way_l1 = find_free_way(L1, new_addr, 1);
+				int insert_way_l2 = find_free_way(L2, new_addr, 2);
+				
+				if (insert_way_l1 != -1){ //there is a free way in L1
+					insert_address(L1, new_addr, 1, insert_way_l1);
+				} else {
+					// delete address from L1 by LRU policy, and remmember it's way for new inserting
+					insert_way_l1 = remove_address(L1, new_addr, 1);
+					insert_address(L1, new_addr, 1, insert_way_l1);
+				}
 
+				if (insert_way_l2 != -1){ //there is a free way in L2
+					insert_address(L2, new_addr, 2, insert_way_l2);
+				} else {
+					// delete address from L2 by LRU policy, and remmember it's way for new inserting
+					insert_way_l2 = remove_address(L2, new_addr, 2);
+					insert_address(L2, new_addr, 2, insert_way_l2);
+				}
+				}
 			}
-
-		} else {
-			
 		}
 
 	}
-
 	
-
-	
-
-	double L1MissRate;
-	double L2MissRate;
-	double avgAccTime;
+	double L1MissRate = num_misses_L1/num_access_L1;
+	double L2MissRate = num_misses_L2/num_access_L2;
+	double avgAccTime = L1Cyc + L1MissRate*L2Cyc + L2MissRate*MemCyc;
 
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
