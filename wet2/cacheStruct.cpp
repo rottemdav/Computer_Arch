@@ -11,6 +11,7 @@ class Address {
 public:
     unsigned int full_address;
     unsigned int offset;
+    unsigned int dirty_bit;
     unsigned int set_L1;
     unsigned int set_L2;
     unsigned int tag_L1;
@@ -41,7 +42,9 @@ public:
         last_seen_L2 = 0;
 
         in_L1 = false;
-        in_L2 = false;        
+        in_L2 = false;  
+
+        dirty_bit = 0;      
 
 }
     //Copy Constructor
@@ -127,7 +130,7 @@ int address_exists(Cache cache, Address address, int cache_level) {
     for (int i=0; i< curr_cache->Nways; i++) {
         Way* way_it = curr_cache->Ways_Arr[i];
 
-        for (size_t j=0; j<way_it->Address_Arr.size(); j++){
+        for (size_t j=0; j < way_it->Address_Arr.size(); j++){
             //if the tag of the address in the way found, return 1
             if (cache_level == 1) {
                 if ((way_it->Address_Arr[j].tag_L1 == curr_tag) && (way_it->Address_Arr[j].set_L1 == curr_set) ){
@@ -190,14 +193,11 @@ void insert_address(Cache cache, Address address, int cache_level, int way_idx){
 
     if (cache_level == 1) {// insert & update times
         curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
-        curr_cache->CounterTime++;
         curr_address->in_L1 = true;
-        curr_address->last_seen_L1 = curr_cache->CounterTime;
+    
     } else if (cache_level ==2) { //
         curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
-        curr_cache->CounterTime++;
         curr_address->in_L2 = true;
-        curr_address->last_seen_L2 = curr_cache->CounterTime;
     }
 }
 
@@ -215,9 +215,8 @@ int remove_address(Cache cache, Address address, int cache_level){
         curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
     }
 
-    /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
-        else - return 0,  cause it means the address wasn't found in the cache */ 
-    int smallest_last_seen = -1;
+    /* smallest_last_seen is the current counter and we search for the biggest gap between the current time and LRU. !!! need to update the function !!! */
+    int smallest_last_seen = curr_cache->CounterTime;
     int smallet_way = -1;
 
     for (int i=0; i< curr_cache->Nways; i++) {
@@ -227,35 +226,26 @@ int remove_address(Cache cache, Address address, int cache_level){
             //if the tag of the address in the way found, return 1
             if (cache_level == 1) {
                 if (way_it->Address_Arr[j].set_L1 == curr_set){
-                    if (smallest_last_seen == -1){ //first address to check, need to update variables
-                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
-                        smallet_way = i;
-                        break; // cause there is no other address in this way that will have the same set
-                    } else if (way_it->Address_Arr[j].last_seen_L1 < smallest_last_seen){
-                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
-                        smallet_way = i;
-                        break; // cause there is no other address in this way that will have the same set
-                    }
+                    if (way_it->Address_Arr[j].last_seen_L1 <= smallest_last_seen){
+                            smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
+                            smallet_way = i;
+                            break; // cause there is no other address in this way that will have the same set
+                        } 
                 }
             }
             if (cache_level == 2) {
-                if (way_it->Address_Arr[j].set_L2 == curr_set) {
-                    if (smallest_last_seen == -1){ //first address to check, need to update variables
-                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
-                        smallet_way = i;
-                        break; // cause there is no other address in this way that will have the same set
-                    } else if (way_it->Address_Arr[j].last_seen_L2 < smallest_last_seen){
-                        smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
-                        smallet_way = i;
-                        break; // cause there is no other address in this way that will have the same set
-                    }
+                if (way_it->Address_Arr[j].set_L2 == curr_set){
+                    if (way_it->Address_Arr[j].last_seen_L2 <= smallest_last_seen){
+                            smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
+                            smallet_way = i;
+                            break; // cause there is no other address in this way that will have the same set
+                        } 
                 }
             }
         }
     }
 
     // find the right way, now lets remove the address
-
     if (cache_level == 1) {
         for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
             if (it->set_L1 == curr_set) {
@@ -273,4 +263,19 @@ int remove_address(Cache cache, Address address, int cache_level){
     } 
 
 return smallet_way;
+}
+
+int update_timestamp(Cache cache, Address address, int cache_level) {
+    Address* curr_address = address.get_address();
+    Cache* curr_cache = cache.get_cache();
+    if (cache_level == 1) {
+        curr_cache->CounterTime++;
+        curr_address->last_seen_L1 = curr_cache->CounterTime;
+    }
+
+    if (cache_level == 2) {
+        curr_cache->CounterTime++;
+        curr_address->last_seen_L2 = curr_cache->CounterTime;
+    }
+
 }
