@@ -3,9 +3,20 @@
 #include <algorithm>
 #include <iostream>
 #include <cstdlib>
-
+#include <cstdint>
 
 using std::string;
+
+class Address;
+class Cache;
+class Way;
+
+Address* address_exists(Cache& cache, Address& address, int cache_level);
+int find_free_way(Cache& cache, Address& address, int cache_level);
+void insert_address(Cache& cache, Address& address, int cache_level, int way_idx);
+int remove_address(Cache& cache, Address& address, int cache_level, Address** addr_to_remove);
+int remove_specific_address(Cache& cache, Address& address, int cache_level);
+int update_timestamp(Cache& cache, Address& address, int cache_level);
 
 class Address {
 public:
@@ -26,10 +37,10 @@ public:
     Address(int address_in_binary, int offset_size, int set_size_l1, int set_size_l2, int tag_size_l1,  int tag_size_l2) {
 
         // createing masks for the address components
-        unsigned int set_mask_L1 = ((1<<offset_size+set_size_l1) - 1) ^ ((1<<offset_size) - 1);
-        unsigned int set_mask_L2 = ((1<<offset_size+set_size_l2) - 1) ^ ((1<<offset_size) - 1);
-        unsigned int tag_mask_L1 = ((1U<<32)-1) ^ ((1<<offset_size+set_size_l1) - 1);
-        unsigned int tag_mask_L2 = ((1U<<32)-1) ^ ((1<<offset_size+set_size_l2) - 1);
+        uint64_t  set_mask_L1 = ((1ULL << offset_size+set_size_l1) - 1) ^ ((1ULL << offset_size) - 1);
+        uint64_t  set_mask_L2 = ((1ULL << offset_size+set_size_l2) - 1) ^ ((1ULL << offset_size) - 1);
+        uint64_t  tag_mask_L1 = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size_l1) - 1);
+        uint64_t  tag_mask_L2 = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size_l2) - 1);
 
         // extracting the matching componenets and assigning them to the class 
         offset = address_in_binary & ((1<<offset_size)-1);
@@ -222,7 +233,7 @@ int remove_address(Cache& cache, Address& address, int cache_level, Address** ad
 
     /* smallest_last_seen is the current counter and we search for the biggest gap between the current time and LRU. !!! need to update the function !!! */
     int smallest_last_seen = curr_cache->CounterTime;
-    int smallet_way = -1;
+    int smallest_way = -1;
 
     for (int i=0; i< curr_cache->Nways; i++) {
         Way* way_it = curr_cache->Ways_Arr[i];
@@ -233,7 +244,7 @@ int remove_address(Cache& cache, Address& address, int cache_level, Address** ad
                 if (way_it->Address_Arr[j].set_L1 == curr_set){
                     if (way_it->Address_Arr[j].last_seen_L1 <= smallest_last_seen){
                             smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
-                            smallet_way = i;
+                            smallest_way = i;
                             break; // cause there is no other address in this way that will have the same set
                         } 
                 }
@@ -242,7 +253,7 @@ int remove_address(Cache& cache, Address& address, int cache_level, Address** ad
                 if (way_it->Address_Arr[j].set_L2 == curr_set){
                     if (way_it->Address_Arr[j].last_seen_L2 <= smallest_last_seen){
                             smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
-                            smallet_way = i;
+                            smallest_way = i;
                             break; // cause there is no other address in this way that will have the same set
                         } 
                 }
@@ -252,24 +263,26 @@ int remove_address(Cache& cache, Address& address, int cache_level, Address** ad
 
     // find the right way, now lets remove the address
     if (cache_level == 1) {
-        for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
+        for (auto it = curr_cache->Ways_Arr[smallest_way]->Address_Arr.begin(); 
+                  it != curr_cache->Ways_Arr[smallest_way]->Address_Arr.end(); 
+                  ++it) {
             if (it->set_L1 == curr_set) {
                 *addr_to_remove = &(*it);
-                curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
+                curr_cache->Ways_Arr[smallest_way]->Address_Arr.erase(it);
                 break; // Remove only the first matching element
             }
         }
     } else if (cache_level == 2){
-        for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
+        for (auto it = curr_cache->Ways_Arr[smallest_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallest_way]->Address_Arr.end(); ++it) {
             if (it->set_L2 == curr_set) {
                 *addr_to_remove = &(*it);
-                curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
+                curr_cache->Ways_Arr[smallest_way]->Address_Arr.erase(it);
                 break; // Remove only the first matching element
             }
         }
     } 
 
-return smallet_way;
+return smallest_way;
 }
 
 int remove_specific_address(Cache& cache, Address& address, int cache_level) {
