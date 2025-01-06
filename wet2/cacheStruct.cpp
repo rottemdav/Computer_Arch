@@ -11,7 +11,6 @@ class Address {
 public:
     unsigned int full_address;
     unsigned int offset;
-    unsigned int dirty_bit;
     unsigned int set_L1;
     unsigned int set_L2;
     unsigned int tag_L1;
@@ -20,6 +19,8 @@ public:
     unsigned int last_seen_L2;
     bool in_L1;
     bool in_L2;
+    unsigned int dirty_bit_L1;
+    unsigned int dirty_bit_L2;
 
     //constructor 
     Address(int address_in_binary, int offset_size, int set_size_l1, int set_size_l2, int tag_size_l1,  int tag_size_l2) {
@@ -44,7 +45,8 @@ public:
         in_L1 = false;
         in_L2 = false;  
 
-        dirty_bit = 0;      
+        dirty_bit_L1 = 0;
+        dirty_bit_L2 = 0;      
 
 }
     //Copy Constructor
@@ -110,13 +112,14 @@ public:
 
 } ;
 
-int address_exists(Cache cache, Address address, int cache_level) {
+/* returns the address if found, else returns NULL */
+Address* address_exists(Cache cache, Address address, int cache_level) {
     Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
     unsigned int curr_tag;
     unsigned int curr_set;
 
-      if (cache_level == 1) {// cache_level==1 means we want to find address in L1
+    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
         curr_tag = curr_address->tag_L1;
         curr_set = curr_address->set_L1;
     } else if (cache_level ==2) { //
@@ -134,18 +137,18 @@ int address_exists(Cache cache, Address address, int cache_level) {
             //if the tag of the address in the way found, return 1
             if (cache_level == 1) {
                 if ((way_it->Address_Arr[j].tag_L1 == curr_tag) && (way_it->Address_Arr[j].set_L1 == curr_set) ){
-                    return 1;
+                    return &(way_it->Address_Arr[j]);
                 }
             }
 
             if (cache_level == 2) {
                 if ((way_it->Address_Arr[j].tag_L2 == curr_tag) && (way_it->Address_Arr[j].set_L2 == curr_set) ){
-                    return 1;
+                    return &(way_it->Address_Arr[j]);
                 }
             }
         }
     }
-    return 0; //if we got out of outer loop it means address is not in any way of cashe
+    return NULL; //if we got out of outer loop it means address is not in any way of cashe
 }
 
 int find_free_way(Cache cache, Address address, int cache_level){
@@ -201,7 +204,7 @@ void insert_address(Cache cache, Address address, int cache_level, int way_idx){
     }
 }
 
-int remove_address(Cache cache, Address address, int cache_level){
+int remove_address(Cache cache, Address address, int cache_level, Address** addr_to_remove){
     // function uses LRU algorithm to remove the address which it's last seen is the smallest
     // returns the way of the removed address
 
@@ -214,6 +217,8 @@ int remove_address(Cache cache, Address address, int cache_level){
     } else if (cache_level ==2) { //
         curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
     }
+
+    
 
     /* smallest_last_seen is the current counter and we search for the biggest gap between the current time and LRU. !!! need to update the function !!! */
     int smallest_last_seen = curr_cache->CounterTime;
@@ -249,6 +254,7 @@ int remove_address(Cache cache, Address address, int cache_level){
     if (cache_level == 1) {
         for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
             if (it->set_L1 == curr_set) {
+                *addr_to_remove = &(*it);
                 curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
                 break; // Remove only the first matching element
             }
@@ -256,6 +262,7 @@ int remove_address(Cache cache, Address address, int cache_level){
     } else if (cache_level == 2){
         for (auto it = curr_cache->Ways_Arr[smallet_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallet_way]->Address_Arr.end(); ++it) {
             if (it->set_L2 == curr_set) {
+                *addr_to_remove = &(*it);
                 curr_cache->Ways_Arr[smallet_way]->Address_Arr.erase(it);
                 break; // Remove only the first matching element
             }
@@ -263,6 +270,43 @@ int remove_address(Cache cache, Address address, int cache_level){
     } 
 
 return smallet_way;
+}
+
+int remove_specific_address(Cache cache, Address address, int cache_level) {
+       Address* curr_address = address.get_address();
+    Cache* curr_cache = cache.get_cache();
+        unsigned int curr_tag;
+        unsigned int curr_set;
+
+        if (cache_level == 1) {// cache_level==1 means we want to find address in L1
+            curr_tag = curr_address->tag_L1;
+            curr_set = curr_address->set_L1;
+        } else if (cache_level == 2) { //
+            curr_tag = curr_address->tag_L2;
+            curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
+        }
+
+        /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
+            else - return 0,  cause it means the address wasn't found in the cache */ 
+        
+        for (int i=0; i< curr_cache->Nways; i++) {
+            Way* way_it = curr_cache->Ways_Arr[i];
+
+            for (auto it = curr_cache->Ways_Arr[i]->Address_Arr.begin(); it != curr_cache->Ways_Arr[i]->Address_Arr.end(); ++it) {
+                if (cache_level == 1) {
+                    if (it->set_L1 == curr_set && it->tag_L1 == curr_tag) {
+                        curr_cache->Ways_Arr[i]->Address_Arr.erase(it);
+                        break; // Remove only the first matching element
+                     }
+                 }
+                if (cache_level == 2) {
+                    if (it->set_L2 == curr_set && it->tag_L2 == curr_tag) {
+                        curr_cache->Ways_Arr[i]->Address_Arr.erase(it);
+                        break; // Remove only the first matching element
+                    }
+                }
+        }
+    }
 }
 
 int update_timestamp(Cache cache, Address address, int cache_level) {
@@ -279,3 +323,4 @@ int update_timestamp(Cache cache, Address address, int cache_level) {
     }
 
 }
+

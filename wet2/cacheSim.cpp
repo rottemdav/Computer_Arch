@@ -133,11 +133,11 @@ int main(int argc, char **argv) {
 		*/
 
 		if(operation == 'R'){ //new start for chache logic, follow the dependencies chart
-			if (!address_exists(L1, new_addr, 1)) {
+			if (address_exists(L1, new_addr, 1)) {
 				num_access_L1++;
 				update_timestamp(L1, new_addr, 1);
 				break;
-			} 	else if (!address_exists(L2, new_addr, 2)) {
+			} 	else if (address_exists(L2, new_addr, 2)) {
 				// if found here - that means that the address WASN'T found in L1, so it counts as a MISS.
 				num_access_L1++;
 				num_misses_L1++;
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
 					Address* addr_to_remove;
 					insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
 					Address* addr_to_remove_in_cache = address_exists(L1, *addr_to_remove, 1);
-					if (!addr_to_remove_in_cache) {
+					if (addr_to_remove_in_cache) {
 						if (addr_to_remove_in_cache->dirty_bit_L1 == 1) {
 							//num_access_L2++;
 							Address* addr_to_change_L2 = address_exists(L2, *addr_to_remove, 2);
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
 					insert_way_l2 = remove_address(L2, new_addr, 2, &addr_to_remove);
 					// return the location in L1 of the evicted address and then snoop L1
 					Address* addr_to_remove_in_L1 = address_exists(L1, *addr_to_remove, 1);
-					if (!addr_to_remove_in_L1) { // don't care for dirty bit in this logic - either way - remove the address from L1
+					if (addr_to_remove_in_L1) { // don't care for dirty bit in this logic - either way - remove the address from L1
 						remove_specific_address(L1, *addr_to_remove_in_L1, 1);
 					}
 					// add new address to L2
@@ -217,44 +217,64 @@ int main(int argc, char **argv) {
 		} // finish operation == 'R' 
 
 		else if (operation == 'W') {
-			if (!address_exists(L1, new_addr, 1)) {
+
+			Address* addr_to_update_L1  = address_exists(L1, new_addr, 1);
+			Address* addr_to_update_L2 = address_exists(L2, new_addr, 2);
+
+			// hit in L1
+			if (addr_to_update_L1) {
 				num_access_L1++;
-				update_timestamp(L1, new_addr, 1);
+				// mark block as dirty and update LRU
+				addr_to_update_L1->dirty_bit_L1 = 1;
+				update_timestamp(L1, *addr_to_update_L1, 1);
 				// for later: update dirty bit
 				break;
-			} 	else if (!address_exists(L2, new_addr, 2)) {
+
+			// miss in L1 and hit in L2
+			} 	else if (addr_to_update_L2) {
 				// if found here - that means that the address WASN'T found in L1, so it counts as a MISS.
-					// ------------------------------?? --------------------- how many accesses to L1  --------------------------------- ??-------------------------------
 				num_access_L1++;
 				num_misses_L1++;
 				num_access_L2++;
 				//update_timestamp(L1, new_addr, 1);
-				update_timestamp(L2, new_addr, 2);
+				update_timestamp(L2, *addr_to_update_L2, 2);
 
 				if (WrAlloc == 1) {
+
 					int insert_way_l1 = find_free_way(L1, new_addr, 1);
-					if (insert_way_l1 != -1) {
-						update_timestamp(L1, new_addr, 1);
+					if (insert_way_l1 != -1) { // found empty space in L1
+						new_addr.dirty_bit_L1 = 1;
+						update_timestamp(L1, new_addr, 1); 
 						insert_address(L1, new_addr, 1, insert_way_l1);
-					} else {
+					
+					} else { // need to evict in L1
 					// didn't find any empty way to add the address - need to evict the oldest address in cache
-					// ------------------------------?? --------------------- do we need to consider the diry bit --------------------------------- ??-------------------------------
-						insert_way_l1 = remove_address(L1, new_addr, 1); // remove oldest address and save the way number it was in.
+						Address* addr_to_remove;
+						insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
+						Address* addr_to_update_L2 = address_exists(L2, *addr_to_remove, 2);
+						if (addr_to_remove->dirty_bit_L1 == 1) {
+							addr_to_update_L2->dirty_bit_L2 = 1;
+							update_timestamp(L2, *addr_to_update_L2, 2);
+						}
+
+						new_addr.dirty_bit_L1 = 1;
 						update_timestamp(L1, new_addr, 1);
 						insert_address(L1, new_addr, 1, insert_way_l1); // add the new address to the way
 					}
+
 					// need to update here LRU statistics and add the address to L1 (the whole logic of adding an address and removing it)
 					break;
-			} else {
-					// for later: update dirty bit
-					break;
-				}
-			} else {
+
+				} else { // no write-allocate
+						addr_to_update_L2->dirty_bit_L2 = 1;
+						break;
+					}
+
+			} else { // miss in L1 and miss in L2
 				num_access_L1++;
 				num_misses_L1++;
 				num_access_L2++;
 				num_misses_L2++;
-				// wasn't found in BOTH L1 and L2
 				if (WrAlloc == 1) {
 					// compulsory miss - now need to add the address BOTH to L1 and L2 
 					int insert_way_l2 = find_free_way(L2, new_addr, 2); // is there an empty space in any way in L2
@@ -262,24 +282,36 @@ int main(int argc, char **argv) {
 						update_timestamp(L2, new_addr,2);
 						insert_address(L2, new_addr, 2, insert_way_l2);
 					} else {
-						insert_way_l2 = remove_address(L2, new_addr, 2);
+						Address* addr_to_remove;
+						insert_way_l2 = remove_address(L2, new_addr, 2, &addr_to_remove);
+						Address* addr_to_update_L1 = address_exists(L1, *addr_to_remove, 1);
+						if (addr_to_update_L1) {
+							remove_specific_address(L1, *addr_to_update_L1, 1);
+						}
 						update_timestamp(L2, new_addr,2);
 						insert_address(L2, new_addr, 2, insert_way_l2);
 						// for later: change address according to dirty bit
 					}
 
 					int insert_way_l1 = find_free_way(L1, new_addr, 1);
-					if (insert_way_l1 != -1) {
+					if (insert_way_l1 != -1) { // empty space found
 						update_timestamp(L1, new_addr, 1);
 						insert_address(L1, new_addr, 1, insert_way_l1);
 					} else {
 					// didn't find any empty way to add the address - need to evict the oldest address in cache
-					// ------------------------------?? --------------------- do we need to consider the diry bit --------------------------------- ??-------------------------------
-						insert_way_l1 = remove_address(L1, new_addr, 1); // remove oldest address and save the way number it was in.
+						Address* addr_to_remove;	
+						insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
+						Address* addr_to_update_L2 = address_exists(L2, *addr_to_remove, 2);
+						if(addr_to_remove->dirty_bit_L1 == 1) {
+							addr_to_update_L2->dirty_bit_L2 = 1;
+							update_timestamp(L2, *addr_to_update_L2, 2);
+						}
 						update_timestamp(L1, new_addr, 1);
 						insert_address(L1, new_addr, 1, insert_way_l1); // add the new address to the way
 					}
 					// need to update here LRU statistics and add the address to L1 (the whole logic of adding an address and removing it)
+					break;
+				} else { // no-write-allocate
 					break;
 				}
 			}
