@@ -113,7 +113,7 @@ public:
 } ;
 
 /* returns the address if found, else returns NULL */
-Address* address_exists(Cache cache, Address address, int cache_level) {
+Address* address_exists(Cache& cache, Address& address, int cache_level) {
     Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
     unsigned int curr_tag;
@@ -151,7 +151,7 @@ Address* address_exists(Cache cache, Address address, int cache_level) {
     return NULL; //if we got out of outer loop it means address is not in any way of cashe
 }
 
-int find_free_way(Cache cache, Address address, int cache_level){
+int find_free_way(Cache& cache, Address& address, int cache_level){
     Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
     unsigned int curr_set;
@@ -190,7 +190,7 @@ int find_free_way(Cache cache, Address address, int cache_level){
     return -1;
 }
 
-void insert_address(Cache cache, Address address, int cache_level, int way_idx){
+void insert_address(Cache& cache, Address& address, int cache_level, int way_idx){
     Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
 
@@ -204,7 +204,7 @@ void insert_address(Cache cache, Address address, int cache_level, int way_idx){
     }
 }
 
-int remove_address(Cache cache, Address address, int cache_level, Address** addr_to_remove){
+int remove_address(Cache& cache, Address& address, int cache_level, Address** addr_to_remove){
     // function uses LRU algorithm to remove the address which it's last seen is the smallest
     // returns the way of the removed address
 
@@ -272,7 +272,7 @@ int remove_address(Cache cache, Address address, int cache_level, Address** addr
 return smallet_way;
 }
 
-int remove_specific_address(Cache cache, Address address, int cache_level) {
+int remove_specific_address(Cache& cache, Address& address, int cache_level) {
        Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
         unsigned int curr_tag;
@@ -309,7 +309,7 @@ int remove_specific_address(Cache cache, Address address, int cache_level) {
     }
 }
 
-int update_timestamp(Cache cache, Address address, int cache_level) {
+int update_timestamp(Cache& cache, Address& address, int cache_level) {
     Address* curr_address = address.get_address();
     Cache* curr_cache = cache.get_cache();
     if (cache_level == 1) {
