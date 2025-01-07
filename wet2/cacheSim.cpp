@@ -312,7 +312,9 @@ int main(int argc, char **argv) {
 	int lines_in_l2_log = L2Size - BSize; //number of addresses can be saved in L2 - LOG
 
 	int set_size_l1 = lines_in_l1_log - L1Assoc; // number of addresses in each way - LOG
-	int set_size_l2 = lines_in_l2_log - L2Assoc; // number of addresses in each way - LOG 
+	int set_size_l2 = lines_in_l2_log - L2Assoc; // number of addresses in each way - LOG
+
+	// Added by Amit - if set size=0, it means we need always to access the only element in each way 
 
 	int offset_size = BSize;
 
@@ -490,10 +492,10 @@ int main(int argc, char **argv) {
 					}
 					int insert_way_l1 = find_free_way(L1, set_l1);
 					if (insert_way_l1 != -1) { // empty space found
-						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, true);
 					} else{ //need to avict a victim from L1, dirty logic
 						insert_way_l1 = remove_address(L1, set_l1, true, set_size_l2, tag_size_l2, L2, false, 0,0,L1);
-						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, true);
 					}
 				}
 			}
