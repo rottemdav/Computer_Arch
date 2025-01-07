@@ -502,7 +502,7 @@ int main(int argc, char **argv) {
 		} // finish opeartion == 'W'
 	}
 	
-	printf("num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
+	//printf("num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
 	
 	double L1MissRate = (num_access_L1 < 1) ? 0 : static_cast<double>(num_misses_L1)/num_access_L1;
 	double L2MissRate = (num_access_L2 < 1) ? 0 : static_cast<double>(num_misses_L2)/num_access_L2;
@@ -510,7 +510,7 @@ int main(int argc, char **argv) {
 
 	printf("L1miss=%.03f ", L1MissRate);
 	printf("L2miss=%.03f ", L2MissRate);
-	printf("AccTimeAvg=%.03f", avgAccTime);
+	printf("AccTimeAvg=%.03f\n", avgAccTime);
 
 	return 0;
 }
