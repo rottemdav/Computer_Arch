@@ -19,48 +19,23 @@ using std::stringstream;
 
 class Address {
 public:
-    unsigned int full_address;
-    unsigned int offset;
-    unsigned int set_L1;
-    unsigned int set_L2;
-    unsigned int tag_L1;
-    unsigned int tag_L2;
-    unsigned int last_seen_L1;
-    unsigned int last_seen_L2;
-    bool in_L1;
-    bool in_L2;
-    unsigned int dirty_bit_L1;
-    unsigned int dirty_bit_L2;
+    unsigned int Address_bin;
+	unsigned int Offset_size;
+	unsigned int Set_size;
+	unsigned int Tag_size;
+    unsigned int Set;
+    unsigned int Tag;
+    unsigned int Last_seen;
+    unsigned int Dirty_bit;
 
     //constructor 
-    Address(int address_in_binary, int offset_size, int set_size_l1, int set_size_l2, int tag_size_l1,  int tag_size_l2) {
-		full_address = address_in_binary;
-
-        // createing masks for the address components
-        uint64_t  set_mask_L1 = ((1ULL << offset_size+set_size_l1) - 1) ^ ((1ULL << offset_size) - 1);
-        uint64_t  set_mask_L2 = ((1ULL << offset_size+set_size_l2) - 1) ^ ((1ULL << offset_size) - 1);
-        uint64_t  tag_mask_L1 = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size_l1) - 1);
-        uint64_t  tag_mask_L2 = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size_l2) - 1);
-
-        // extracting the matching componenets and assigning them to the class 
-        offset = address_in_binary & ((1<<offset_size)-1);
-        set_L1 = address_in_binary & set_mask_L1;
-        set_L2 = address_in_binary & set_mask_L2;
-        tag_L1 = address_in_binary & tag_mask_L1;
-        tag_L2 = address_in_binary & tag_mask_L2;
-
-        //initializing the rest of the class memebers
-        last_seen_L1 = 0;
-        last_seen_L2 = 0;
-
-        in_L1 = false;
-        in_L2 = false;  
-
-        dirty_bit_L1 = 0;
-        dirty_bit_L2 = 0;  
+    Address(unsigned int address_in_binary, unsigned int offset_size, unsigned int set_size,
+	 unsigned int tag_size, unsigned int set, unsigned int tag): Address_bin(address_in_binary), 
+	 Offset_size(offset_size), Set_size(set_size), Tag_size(tag_size), Set(set), Tag(tag) {
+        Last_seen = 0; 
+        Dirty_bit = 0;
 		//std::cout << "created new address"  << std::endl;
 		//std::cout << "full address:" << address_in_binary << std::endl;
-
 }
     //Copy Constructor
 
@@ -92,7 +67,7 @@ public:
     int CounterTime;
     int Way_Size; /*Number of lines in each way = Number of addresses can be saved in a single way*/
 
-    Way** Ways_Arr;
+    Way** Ways_Arr; // array of pointers to struct of class Way
 
     //constructor
     Cache(int blocksize, int wr_alloc, int cashesize, int nways, int way_size) : 
@@ -125,79 +100,40 @@ public:
 
 } ;
 
-/* returns the address if found, else returns NULL */
-Address* address_exists(Cache& cache, Address& address, int cache_level) {
-	cout << "checking if the address exist..." << endl;
-    Address* curr_address = address.get_address();
-    Cache* curr_cache = cache.get_cache();
-    unsigned int curr_tag;
-    unsigned int curr_set;
 
-    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
-        curr_tag = curr_address->tag_L1;
-        curr_set = curr_address->set_L1;
-    } else if (cache_level ==2) { //
-        curr_tag = curr_address->tag_L2;
-        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
-    }
+/* returns a pointer to address if found, else returns nullptr */
+Address* address_exists(Cache& cache, unsigned int set, unsigned int tag) {
+    Cache* curr_cache = cache.get_cache();
 
     /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
         else - return 0,  cause it means the address wasn't found in the cache */ 
-    
     for (int i=0; i< curr_cache->Nways; i++) {
-        Way* way_it = curr_cache->Ways_Arr[i];
+		Way* way_it = curr_cache->Ways_Arr[i];
 
-        for (size_t j=0; j < way_it->Address_Arr.size(); j++){
-            //if the tag of the address in the way found, return 1
-            if (cache_level == 1) {
-				printf ("L1 tag: %d, L1 set: %d, curr_tag: %d, curr_set: %d\n", way_it->Address_Arr[j].tag_L1, way_it->Address_Arr[j].set_L1, curr_tag, curr_set);
-                if ((way_it->Address_Arr[j].tag_L1 == curr_tag) && (way_it->Address_Arr[j].set_L1 == curr_set) ){
+		for (size_t j=0; j < way_it->Address_Arr.size(); j++) {
+			if ((way_it->Address_Arr[j].Set == set) && (way_it->Address_Arr[j].Tag == tag)) {
                     return &(way_it->Address_Arr[j]);
-                }
-            }
-
-            if (cache_level == 2) {
-				printf ("L2 tag: %d, L2 set: %d, curr_tag: %d, curr_set: %d\n", way_it->Address_Arr[j].tag_L2, way_it->Address_Arr[j].set_L2, curr_tag, curr_set);
-                if ((way_it->Address_Arr[j].tag_L2 == curr_tag) && (way_it->Address_Arr[j].set_L2 == curr_set) ){
-                    return &(way_it->Address_Arr[j]);
-                }
+                } 
             }
         }
-    }
-    return NULL; //if we got out of outer loop it means address is not in any way of cashe
+    return nullptr; //if we got out of outer loop it means address is not in any way of cashe
 }
 
-int find_free_way(Cache& cache, Address& address, int cache_level){
-    Address* curr_address = address.get_address();
+/*gets a cache, and a set, and returns a way with this set free. if there is'nt - return -1*/
+int find_free_way(Cache& cache, unsigned int set){
     Cache* curr_cache = cache.get_cache();
-    unsigned int curr_set;
-
-    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
-        curr_set = curr_address->set_L1;
-    } else if (cache_level ==2) { //
-        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
-    }
 
     /* iterates through all ways in cache - if there is a free way in the cuur_set index - return the way index in cache. 
         else - return -1,  which means we need to replace an address in a way the cache */ 
-    
     for (int i=0; i< curr_cache->Nways; i++) {
         Way* way_it = curr_cache->Ways_Arr[i];
         bool found_free_way = true;
 
         for (size_t j=0; j<way_it->Address_Arr.size(); j++){
             //if the tag of the address in the way found, return 1
-            if (cache_level == 1) {
-                if(way_it->Address_Arr[j].set_L1 == curr_set){
-                    found_free_way = false;
-                }
-            }
-
-            if (cache_level == 2) {
-               if(way_it->Address_Arr[j].set_L2 == curr_set){
-                    found_free_way = false;
-                }
-            }
+			if(way_it->Address_Arr[j].Set == set){
+				found_free_way = false;
+			}
         }
         if(found_free_way){
             return i;
@@ -206,149 +142,107 @@ int find_free_way(Cache& cache, Address& address, int cache_level){
     return -1;
 }
 
-void insert_address(Cache& cache, Address& address, int cache_level, int way_idx){
-    Address* curr_address = address.get_address();
+/*gets a cache, a set, a tag, a way, and other consts to remmemeber, and insert a new address to cache*/
+void insert_address(Cache& cache, unsigned int address_bin, unsigned int offset, unsigned int set_size,
+  unsigned int tag_size, unsigned int set, unsigned int tag, int way_idx, bool D){
     Cache* curr_cache = cache.get_cache();
-
-    if (cache_level == 1) {// insert & update times
-        curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
-        curr_address->in_L1 = true;
-    
-    } else if (cache_level ==2) { //
-        curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(*curr_address);
-        curr_address->in_L2 = true;
-		printf("added addres in way: %d, cache level: %d\n", way_idx, cache_level);
-    }
+	Address address_to_push = Address(address_bin, offset, set_size, tag_size, set, tag); //creates new Address element
+	curr_cache->Ways_Arr[way_idx]->Address_Arr.push_back(address_to_push); //push it to vector
+	update_timestamp(cache, set, tag, D);	//update times
 }
 
-int remove_address(Cache& cache, Address& address, int cache_level, Address** addr_to_remove){
-    // function uses LRU algorithm to remove the address which it's last seen is the smallest
-    // returns the way of the removed address
 
-    Address* curr_address = address.get_address();
+/*gets a cache, and a set, and a flag: "D" with some sizes for dirty logic. and flag "S" with some
+sizes for snoop logic. If we perform snoop, we remove the found address.
+Finds a victim to remove. returns the way of the removed victim.
+if the victim was dirty - doing dirty logic. removes the victim */
+int remove_address(Cache& cache, unsigned int set, bool D, int set_size2, int tag_size2, Cache& L2,
+bool S, int set_size1, int tag_size1, Cache& L1){
+    // finding a victim using LRU
     Cache* curr_cache = cache.get_cache();
-    unsigned int curr_set;
-
-    if (cache_level == 1) {// cache_level==1 means we want to find address in L1
-        curr_set = curr_address->set_L1;
-    } else if (cache_level ==2) { //
-        curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
-    }
-
-    
-
-    /* smallest_last_seen is the current counter and we search for the biggest gap between the current time and LRU. !!! need to update the function !!! */
     int smallest_last_seen = curr_cache->CounterTime;
     int smallest_way = -1;
+	Address* address_to_remove;
 
     for (int i=0; i< curr_cache->Nways; i++) {
         Way* way_it = curr_cache->Ways_Arr[i];
 
         for (size_t j=0; j<way_it->Address_Arr.size(); j++){
-            //if the tag of the address in the way found, return 1
-            if (cache_level == 1) {
-                if (way_it->Address_Arr[j].set_L1 == curr_set){
-                    if (way_it->Address_Arr[j].last_seen_L1 <= smallest_last_seen){
-                            smallest_last_seen = way_it->Address_Arr[j].last_seen_L1;
+                if (way_it->Address_Arr[j].Set == set){
+                    if (way_it->Address_Arr[j].Last_seen <= smallest_last_seen){
+                            smallest_last_seen = way_it->Address_Arr[j].Last_seen;
                             smallest_way = i;
-                            continue; // cause there is no other address in this way that will have the same set
+							address_to_remove = &(way_it->Address_Arr[j]);
+							/*Amit: maybe should be here break - need to check*/
+                            break; // cause there is no other address in this way that will have the same set
                         } 
                 }
-            }
-            if (cache_level == 2) {
-                if (way_it->Address_Arr[j].set_L2 == curr_set){
-                    if (way_it->Address_Arr[j].last_seen_L2 <= smallest_last_seen){
-                            smallest_last_seen = way_it->Address_Arr[j].last_seen_L2;
-                            smallest_way = i;
-                            continue; // cause there is no other address in this way that will have the same set
-                        } 
-                }
-            }
         }
     }
-
-	if (smallest_way == -1) {
-		return smallest_way;
+    // after finding the victim, if we need to do "Dirty" logic then do it
+	if(D){// Perform dirty logic if needed
+		if(address_to_remove->Dirty_bit){
+			// find set and tag in l2
+			unsigned int set_l2 = find_set(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size2);
+			unsigned int tag_l2 = find_tag(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size2, tag_size2);
+			// find address in l2, for updating LRU and dirty bit
+			update_timestamp(L2, set_l2, tag_l2, D);			
+		}
 	}
 
-    // find the right way, now lets remove the address
-    if (cache_level == 1) {
-        for (auto it = curr_cache->Ways_Arr[smallest_way]->Address_Arr.begin(); 
-                  it != curr_cache->Ways_Arr[smallest_way]->Address_Arr.end(); 
-                  ++it) {
-            if (it->set_L1 == curr_set) {
-                *addr_to_remove = &(*it);
-                curr_cache->Ways_Arr[smallest_way]->Address_Arr.erase(it);
-                break; // Remove only the first matching element
-            }
-        }
-    } else if (cache_level == 2){
-        for (auto it = curr_cache->Ways_Arr[smallest_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallest_way]->Address_Arr.end(); ++it) {
-            if (it->set_L2 == curr_set) {
-                *addr_to_remove = &(*it);
-                curr_cache->Ways_Arr[smallest_way]->Address_Arr.erase(it);
-                break; // Remove only the first matching element
-            }
-        }
-    } 
+	if(S){// Perform snoop logic if needed
+		//find the address to remove in l1, if it's there - remove it
+		unsigned int set_l1 = find_set(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size1);
+		unsigned int tag_l1 = find_tag(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size1, tag_size1);
+		Cache* curr_L1 = L1.get_cache();
+		for (int i=0; i< curr_L1->Nways; i++) {
+			for (auto it = curr_L1->Ways_Arr[i]->Address_Arr.begin(); it != curr_L1->Ways_Arr[i]->Address_Arr.end(); ++it){
+				if ((it->Set == set_l1) && (it->Tag == tag_l1)) {
+					curr_L1->Ways_Arr[i]->Address_Arr.erase(it);
+					break;
+					} 
+				}
+			}
+	}
 
-return smallest_way;
+	 // Remove the victim from the cache
+	for (auto it = curr_cache->Ways_Arr[smallest_way]->Address_Arr.begin(); it != curr_cache->Ways_Arr[smallest_way]->Address_Arr.end(); ++it) {
+		if (it->Set == set) {
+			curr_cache->Ways_Arr[smallest_way]->Address_Arr.erase(it);
+			break; // Remove only the first matching element
+		}
+	}
+return smallest_way; // Return the way where the victim was removed
 }
 
-int remove_specific_address(Cache& cache, Address& address, int cache_level) {
-       Address* curr_address = address.get_address();
+/* gets a cache, set and tag, and a flag "D" for dirty, find the address in cache and updates it timestemp. Only for existing addresses*/
+int update_timestamp(Cache& cache, unsigned int set, unsigned int tag, bool D) {
+    Address* address_pointer= address_exists(cache, set, tag);
     Cache* curr_cache = cache.get_cache();
-        unsigned int curr_tag;
-        unsigned int curr_set;
-
-        if (cache_level == 1) {// cache_level==1 means we want to find address in L1
-            curr_tag = curr_address->tag_L1;
-            curr_set = curr_address->set_L1;
-        } else if (cache_level == 2) { //
-            curr_tag = curr_address->tag_L2;
-            curr_set = curr_address->set_L2; // cache_level==2 means we want to find address in L2
-        }
-
-        /* iterates through all ways in cache - if there is an address with the same tag AND the same set in one of them - We have a match! return 1. 
-            else - return 0,  cause it means the address wasn't found in the cache */ 
-        
-        for (int i=0; i< curr_cache->Nways; i++) {
-            Way* way_it = curr_cache->Ways_Arr[i];
-
-            for (auto it = curr_cache->Ways_Arr[i]->Address_Arr.begin(); it != curr_cache->Ways_Arr[i]->Address_Arr.end(); ++it) {
-                if (cache_level == 1) {
-                    if (it->set_L1 == curr_set && it->tag_L1 == curr_tag) {
-                        curr_cache->Ways_Arr[i]->Address_Arr.erase(it);
-                        break; // Remove only the first matching element
-                     }
-                 }
-                if (cache_level == 2) {
-                    if (it->set_L2 == curr_set && it->tag_L2 == curr_tag) {
-                        curr_cache->Ways_Arr[i]->Address_Arr.erase(it);
-                        break; // Remove only the first matching element
-                    }
-                }
-        }
-    }
+	curr_cache->CounterTime++;
+	//printf("curr_cache->CounterTime: %d \n", cache->CounterTime);
+	address_pointer->Last_seen = curr_cache->CounterTime;
+	if(D){
+		address_pointer->Dirty_bit=1;
+	}
 }
 
-int update_timestamp(Cache& cache, Address& address, int cache_level) {
-    Address* curr_address = address.get_address();
-    Cache* curr_cache = cache.get_cache();
-    if (cache_level == 1) {
-        curr_cache->CounterTime++;
-		printf("curr_cache->CounterTime: %d \n", curr_cache->CounterTime);
-        curr_address->last_seen_L1 = curr_cache->CounterTime;
-    }
+unsigned int find_tag(int address_in_binary, int offset_size, int set_size, int tag_size) {
 
-    if (cache_level == 2) {
-        curr_cache->CounterTime++;
-		printf("curr_cache->CounterTime: %d \n", curr_cache->CounterTime);
-        curr_address->last_seen_L2 = curr_cache->CounterTime;
-    }
-
+	// createing masks for the address components
+	uint64_t  set_mask = ((1ULL << offset_size+set_size) - 1) ^ ((1ULL << offset_size) - 1);
+	uint64_t  tag_mask = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size) - 1);
+	// extracting the matching componenets and assigning them to the class 
+	unsigned int tag = address_in_binary & tag_mask;
 }
 
+unsigned int find_set(int address_in_binary, int offset_size, int set_size) {
+
+	// createing masks for the address components
+	uint64_t  set_mask = ((1ULL << offset_size+set_size) - 1) ^ ((1ULL << offset_size) - 1);
+	// extracting the matching componenets and assigning them to the class 
+	unsigned int set = address_in_binary & set_mask;
+}
 
 
 int main(int argc, char **argv) {
@@ -404,8 +298,8 @@ int main(int argc, char **argv) {
 	int lines_in_l1_log = L1Size - BSize; //number of addresses can be saved in L1 - LOG
 	int lines_in_l2_log = L2Size - BSize; //number of addresses can be saved in L2 - LOG
 
-	int set_size_l1 = lines_in_l1_log - L1Assoc; 
-	int set_size_l2 = lines_in_l2_log - L2Assoc; 
+	int set_size_l1 = lines_in_l1_log - L1Assoc; // number of addresses in each way - LOG
+	int set_size_l2 = lines_in_l2_log - L2Assoc; // number of addresses in each way - LOG 
 
 	int offset_size = BSize;
 
@@ -442,69 +336,57 @@ int main(int argc, char **argv) {
 			cout << "Command Format error" << endl;
 			return 0;
 		}
-		cout << " <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< new address >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << endl;
+		//cout << " <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< new address >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << endl;
 		// DEBUG - remove this line
-		cout << "operation: " << operation;
+		//cout << "operation: " << operation;
 
 		string cutAddress = address.substr(2); // Removing the "0x" part of the address
 
 		// DEBUG - remove this line
-		cout << ", address (hex)" << cutAddress;
+		//cout << ", address (hex)" << cutAddress;
 
-		unsigned long int num = 0;
-		num = strtoul(cutAddress.c_str(), NULL, 16);
+		unsigned long int address_bin = 0;
+		address_bin = strtoul(cutAddress.c_str(), NULL, 16);
 
 		// DEBUG - remove this line
-		cout << " (dec) " << num << endl;
+		//cout << " (dec) " << address_bin << endl;
 
-		/* creates address class with parsed data */
-		Address new_addr(num, offset_size, set_size_l1, set_size_l2, tag_size_l1, tag_size_l2);
+		/* Amit changes: instead of create a new address element, work only with address tag and set */
+		unsigned int set_l1 = find_set(address_bin, offset_size, set_size_l1);
+		unsigned int set_l2 = find_set(address_bin, offset_size, set_size_l2);
 
-		/* checks if the address exists in the cache */
-		/* 
-		if exist in L1 -> we have a hit. num_access_L1++, continue loop (move to other command)
-		if not exist in L1 -> check in L2. num_access_L1++, num_misses_L1++.
-		if exist in L2 -> hit L2. num_eccess_l2++, continue loop (move to other command)
-		if not exist in L2 -> miss. num_access_L2++, num_misses_L2++. insert address to the cashe:
-				if operation==R: bring address to L1 and L2.
-				if operation==W: bring address to L1 and L2 only if policy is write allocate
-		*/
+		unsigned int tag_l1 = find_tag(address_bin, offset_size, set_size_l1, tag_size_l1);
+		unsigned int tag_l2 = find_tag(address_bin, offset_size, set_size_l2, tag_size_l2);
+		
+
+		/*Amit Chang: change all the internal functions to work with tag & set, and not with address object.
+		also, change all the internal functions not to differ between cache L1 and L2*/
 
 		if(operation == 'r'){ //new start for chache logic, follow the dependencies chart
-			if (address_exists(L1, new_addr, 1)) { // L1 hit
+
+			if (address_exists(L1, set_l1, tag_l1)) { // L1 hit
 				num_access_L1++;
-				printf("L1 hit: num_access_L1: %d\n", num_access_L1 );
-				update_timestamp(L1, new_addr, 1);
+				//printf("L1 hit: num_access_L1: %d\n", num_access_L1 );
+				update_timestamp(L1, set_l1, tag_l1, false);
 				continue;
-			} 	else if (address_exists(L2, new_addr, 2)) { // L1 miss, L2 hit:
+			} 	else if (address_exists(L2, set_l2, tag_l2)) { // L1 miss, L2 hit:
 				// if found here - that means that the address WASN'T found in L1, so it counts as a MISS.
 				num_access_L1++;
 				num_misses_L1++;
 				num_access_L2++;
-				printf("L1 miss, L2 hit: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2);
-				update_timestamp(L2, new_addr, 2);
+				//printf("L1 miss, L2 hit: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2);
+				update_timestamp(L2, set_l2, tag_l2, false);
 				
 				// adding to L1 because every address that was found in L2 must be in L1 also
-				int insert_way_l1 = find_free_way(L1, new_addr, 1);
-				if (insert_way_l1 != -1) {
-					update_timestamp(L1, new_addr, 1);
-					insert_address(L1, new_addr, 1, insert_way_l1);
+				int insert_way_l1 = find_free_way(L1, set_l1);
+				if (insert_way_l1 != -1) {				
+					/*Amit change: edited insert_address to add the timestamp inside*/	
+					insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
 				} else {
 					// didn't find any empty way to add the address - need to evict the oldest address in cache
-					// dirty bit logic 
-					Address* addr_to_remove;
-					insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
-					Address* addr_to_remove_in_cache = address_exists(L1, *addr_to_remove, 1);
-					if (addr_to_remove_in_cache) {
-						if (addr_to_remove_in_cache->dirty_bit_L1 == 1) {
-							//num_access_L2++;
-							Address* addr_to_change_L2 = address_exists(L2, *addr_to_remove, 2);
-							addr_to_change_L2->dirty_bit_L2 = 1;
-							update_timestamp(L2, *addr_to_change_L2, 2);				
-							} 
-						}
-					update_timestamp(L1, new_addr, 1);
-					insert_address(L1, new_addr, 1, insert_way_l1); // add the new address to the way
+					// remove the victim and perform a dirty logic
+					insert_way_l1 = remove_address(L1, set_l1, true, set_size_l2, tag_size_l2, L2, false, 0, 0, L1); // remove oldest address and save the way number it was in.
+					insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false); // add the new address to the way
 				}
 				// need to update here LRU statistics and add the address to L1 (the whole logic of adding an address and removing it)
 				continue;
@@ -514,44 +396,26 @@ int main(int argc, char **argv) {
 				num_misses_L1++;
 				num_access_L2++;
 				num_misses_L2++;
-				printf(" L1 miss, L2 miss: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
+				//printf(" L1 miss, L2 miss: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
 
 				// compulsory miss - now need to add the address BOTH to L1 and L2 
 				// update in L2
-				int insert_way_l2 = find_free_way(L2, new_addr, 2); // is there an empty space in any way in L2
+				int insert_way_l2 = find_free_way(L2, set_l2); // is there an empty space in any way in L2
 				
 				if (insert_way_l2 != -1) { //empty space found
-					update_timestamp(L2, new_addr,2);
-					insert_address(L2, new_addr, 2, insert_way_l2);
-
-				} else { // need to evict from L2
-					Address* addr_to_remove;
-					insert_way_l2 = remove_address(L2, new_addr, 2, &addr_to_remove);
-					// return the location in L1 of the evicted address and then snoop L1
-					Address* addr_to_remove_in_L1 = address_exists(L1, *addr_to_remove, 1);
-					if (addr_to_remove_in_L1) { // don't care for dirty bit in this logic - either way - remove the address from L1
-						remove_specific_address(L1, *addr_to_remove_in_L1, 1);
-					}
-					// add new address to L2
-					update_timestamp(L2, new_addr,2);
-					insert_address(L2, new_addr, 2, insert_way_l2);
+					insert_address(L2, address_bin, offset_size, set_size_l2, tag_size_l2, set_l2, tag_l2, insert_way_l2, false);
+				} else { // need to evict from L2, here we don't mind dirty logic, but need to snoop l1
+					insert_way_l2 = remove_address(L2, set_l2, false, 0,0,L2, true, set_size_l1, tag_size_l1, L1);
+					// after remove an address from L2 & snoop it in L1, we can add the new address to L2
+					insert_address(L2, address_bin, offset_size, set_size_l2, tag_size_l2, set_l2, tag_l2, insert_way_l2, false);
 				}
 				//update in L1
-				int insert_way_l1 = find_free_way(L1, new_addr, 1);
+				int insert_way_l1 = find_free_way(L1, set_l1);
 				if (insert_way_l1 != -1) { // empty space found
-					update_timestamp(L1, new_addr,1);
-					insert_address(L1, new_addr, 1, insert_way_l1);
-				} else {
-					Address* addr_to_remove;
-					insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove);
-					if (addr_to_remove->dirty_bit_L1 == 1) {
-						Address* addr_to_update_in_L2 = address_exists(L2, *addr_to_remove, 2);
-						addr_to_update_in_L2->dirty_bit_L2 == 1;
-						update_timestamp(L2, *addr_to_update_in_L2,2);
-						//num_access_L2++;
-					}
-					update_timestamp(L1, new_addr,1);
-					insert_address(L1, new_addr, 1, insert_way_l1);
+					insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
+				} else { //need to find a victim in L1, and perform dirty logic on it in L2. 
+					insert_way_l1 = remove_address(L1, set_l1, true, set_size_l2, tag_size_l2, L2, false, 0,0,L1);
+					insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
 				}
 			continue;
 			}
@@ -559,112 +423,70 @@ int main(int argc, char **argv) {
 
 		else if (operation == 'w') {
 
-			Address* addr_to_update_L1  = address_exists(L1, new_addr, 1);
-			Address* addr_to_update_L2 = address_exists(L2, new_addr, 2);
+			//Address* addr_to_update_L1  = address_exists(L1, new_addr, 1);
+			//Address* addr_to_update_L2 = address_exists(L2, new_addr, 2);
 
 			// hit in L1
-			if (addr_to_update_L1) {
+			if (address_exists(L1, set_l1, tag_l1)) {
 				num_access_L1++;
-				printf("L1 hit: num_access_L1: %d\n", num_access_L1 );
+				//printf("L1 hit: num_access_L1: %d\n", num_access_L1 );
 				// mark block as dirty and update LRU
-				addr_to_update_L1->dirty_bit_L1 = 1;
-				update_timestamp(L1, *addr_to_update_L1, 1);
-				// for later: update dirty bit
+				update_timestamp(L1, set_l1, tag_l1, true);
 				continue;
 
 			// miss in L1 and hit in L2
-			} 	else if (addr_to_update_L2) {
+			} 	else if (address_exists(L2, set_l2, tag_l2)) {
 				// if found here - that means that the address WASN'T found in L1, so it counts as a MISS.
 				num_access_L1++;
 				num_misses_L1++;
 				num_access_L2++;
-				printf("L1 miss, L2 hit: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2);
-				//update_timestamp(L1, new_addr, 1);
-				update_timestamp(L2, *addr_to_update_L2, 2);
-
-				if (WrAlloc == 1) {
-
-					int insert_way_l1 = find_free_way(L1, new_addr, 1);
+				//printf("L1 miss, L2 hit: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2);
+				
+				/* ---- if WrAlloc==1: dirty in L1. Else: dirty in L2. important for inserting to cache ----*/
+				
+				if(!WrAlloc){//no need to alloc in L1
+					update_timestamp(L2, set_l2, tag_l2, true); // mark as dirty and update times
+				}
+				else {
+					int insert_way_l1 = find_free_way(L1, set_l1);
 					if (insert_way_l1 != -1) { // found empty space in L1
-						new_addr.dirty_bit_L1 = 1;
-						update_timestamp(L1, new_addr, 1); 
-						insert_address(L1, new_addr, 1, insert_way_l1);
-					
-					} else { // need to evict in L1
-					// didn't find any empty way to add the address - need to evict the oldest address in cache
-						Address* addr_to_remove;
-						insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
-						Address* addr_to_update_L2 = address_exists(L2, *addr_to_remove, 2);
-						if (addr_to_remove->dirty_bit_L1 == 1) {
-							addr_to_update_L2->dirty_bit_L2 = 1;
-							update_timestamp(L2, *addr_to_update_L2, 2);
-						}
-
-						new_addr.dirty_bit_L1 = 1;
-						update_timestamp(L1, new_addr, 1);
-						insert_address(L1, new_addr, 1, insert_way_l1); // add the new address to the way
+						// insert and mark dirty
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, true);
 					}
-
-					// need to update here LRU statistics and add the address to L1 (the whole logic of adding an address and removing it)
-					continue;
-
-				} else { // no write-allocate
-						addr_to_update_L2->dirty_bit_L2 = 1;
-						continue;
+					else { // need to evict in L1 & dirty logic
+						insert_way_l1 = remove_address(L1, set_l1, true, set_size_l2, tag_size_l2, L2, false, 0,0,L1);
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, true);
 					}
-
+				}
 			} else { // miss in L1 and miss in L2
 				num_access_L1++;
 				num_misses_L1++;
 				num_access_L2++;
 				num_misses_L2++;
-				printf("L1 miss, L2 miss: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
-				if (WrAlloc == 1) {
-					// compulsory miss - now need to add the address BOTH to L1 and L2 
-					int insert_way_l2 = find_free_way(L2, new_addr, 2); // is there an empty space in any way in L2
-					printf("way in L2 that's have empty space: %d\n", insert_way_l2);
+				//printf("L1 miss, L2 miss: num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
+				if(!WrAlloc){ //no need to insert cache because it's writing
+					continue;
+				}
+				else{ //write allocate logic, compulsory miss - now need to add the address BOTH to L1 and L2 
+					int insert_way_l2 = find_free_way(L2, set_l2);
 					if (insert_way_l2 != -1) { // empty space found
-						update_timestamp(L2, new_addr,2);
-						insert_address(L2, new_addr, 2, insert_way_l2);
-						cout << "added succesuflly to L2" << endl;
-					} else {
-						Address* addr_to_remove;
-						insert_way_l2 = remove_address(L2, new_addr, 2, &addr_to_remove);
-						Address* addr_to_update_L1 = address_exists(L1, *addr_to_remove, 1);
-						if (addr_to_update_L1) {
-							remove_specific_address(L1, *addr_to_update_L1, 1);
-						}
-						update_timestamp(L2, new_addr,2);
-						insert_address(L2, new_addr, 2, insert_way_l2);
-						// for later: change address according to dirty bit
+						insert_address(L2, address_bin, offset_size, set_size_l2, tag_size_l2, set_l2, tag_l2, insert_way_l2, false);
+					} else{ //need to evict a victim, snoop in L1
+						insert_way_l2 = remove_address(L2, set_l2, false, 0,0,L2, true, set_size_l1, tag_size_l1, L1);
+						insert_address(L2, address_bin, offset_size, set_size_l2, tag_size_l2, set_l2, tag_l2, insert_way_l2, false);
 					}
-
-					int insert_way_l1 = find_free_way(L1, new_addr, 1);
-					printf("way in L1 that's have empty space: %d\n", insert_way_l1);
+					int insert_way_l1 = find_free_way(L1, set_l1);
 					if (insert_way_l1 != -1) { // empty space found
-						update_timestamp(L1, new_addr, 1);
-						insert_address(L1, new_addr, 1, insert_way_l1);
-						cout << "added succesuflly to L1" << endl;
-					} else {
-					// didn't find any empty way to add the address - need to evict the oldest address in cache
-						Address* addr_to_remove;	
-						insert_way_l1 = remove_address(L1, new_addr, 1, &addr_to_remove); // remove oldest address and save the way number it was in.
-						Address* addr_to_update_L2 = address_exists(L2, *addr_to_remove, 2);
-						if(addr_to_remove->dirty_bit_L1 == 1) {
-							addr_to_update_L2->dirty_bit_L2 = 1;
-							update_timestamp(L2, *addr_to_update_L2, 2);
-						}
-						update_timestamp(L1, new_addr, 1);
-						insert_address(L1, new_addr, 1, insert_way_l1); // add the new address to the way
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
+					} else{ //need to avict a victim from L1, dirty logic
+						insert_way_l1 = remove_address(L1, set_l1, true, set_size_l2, tag_size_l2, L2, false, 0,0,L1);
+						insert_address(L1, address_bin, offset_size, set_size_l1, tag_size_l1, set_l1, tag_l1, insert_way_l1, false);
 					}
-					// need to update here LRU statistics and add the address to L1 (the whole logic of adding an address and removing it)
-					continue;
-				} else { // no-write-allocate
-					continue;
 				}
 			}
 		} // finish opeartion == 'W'
 	}
+	
 	printf("num_access_L1: %d, num_misses_L1: %d, num_access_L2: %d, num_misses_L2: %d\n", num_access_L1 , num_misses_L1, num_access_L2, num_misses_L2);
 	
 	double L1MissRate = (num_access_L1 < 1) ? 0 : static_cast<double>(num_misses_L1)/num_access_L1;
