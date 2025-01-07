@@ -18,14 +18,6 @@ using std::ifstream;
 using std::stringstream;
 
 
-// some declaration
-
-unsigned int find_set(int address_in_binary, int offset_size, int set_size);
-unsigned int find_tag(int address_in_binary, int offset_size, int set_size, int tag_size);
-int update_timestamp(Cache& cache, unsigned int set, unsigned int tag, bool D);
-int remove_address(Cache& cache, unsigned int set, bool D, int set_size2, int tag_size2, Cache& L2,
-bool S, int set_size1, int tag_size1, Cache& L1);
-
 
 class Address {
 public:
@@ -109,6 +101,14 @@ public:
     }
 
 } ;
+
+// some declaration
+
+unsigned int find_set(int address_in_binary, int offset_size, int set_size);
+unsigned int find_tag(int address_in_binary, int offset_size, int set_size, int tag_size);
+int update_timestamp(Cache& cache, unsigned int set, unsigned int tag, bool D);
+int remove_address(Cache& cache, unsigned int set, bool D, int set_size2, int tag_size2, Cache& L2,
+bool S, int set_size1, int tag_size1, Cache& L1);
 
 
 /* returns a pointer to address if found, else returns nullptr */
