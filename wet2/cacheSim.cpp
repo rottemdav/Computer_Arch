@@ -152,10 +152,11 @@ void insert_address(Cache& cache, unsigned int address_bin, unsigned int offset,
 }
 
 
-/*gets a cache, and a set, and a flag: "D" with some sizes for dirty logic. and flag "S" with some
-sizes for snoop logic. If we perform snoop, we remove the found address.
-Finds a victim to remove. returns the way of the removed victim.
-if the victim was dirty - doing dirty logic. removes the victim */
+/*gets a cache, a set, a flag: "D" with some sizes for dirty logic, and a flag "S" with some
+sizes for snoop logic.
+Finds a victim to remove. remmember the way of the removed victim.
+if the victim was dirty - doing dirty logic. 
+if the victim is in L2 - need to snoop L1 and removes it if there. removes the victim */
 int remove_address(Cache& cache, unsigned int set, bool D, int set_size2, int tag_size2, Cache& L2,
 bool S, int set_size1, int tag_size1, Cache& L1){
     // finding a victim using LRU
@@ -173,8 +174,7 @@ bool S, int set_size1, int tag_size1, Cache& L1){
                             smallest_last_seen = way_it->Address_Arr[j].Last_seen;
                             smallest_way = i;
 							address_to_remove = &(way_it->Address_Arr[j]);
-							/*Amit: maybe should be here break - need to check*/
-                            break; // cause there is no other address in this way that will have the same set
+                            break; // the inner loop, cause there is no other address in this way with the same set
                         } 
                 }
         }
@@ -182,7 +182,7 @@ bool S, int set_size1, int tag_size1, Cache& L1){
     // after finding the victim, if we need to do "Dirty" logic then do it
 	if(D){// Perform dirty logic if needed
 		if(address_to_remove->Dirty_bit){
-			// find set and tag in l2
+			// dirty logic only relevant when in L2, so find set and tag in l2
 			unsigned int set_l2 = find_set(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size2);
 			unsigned int tag_l2 = find_tag(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size2, tag_size2);
 			// find address in l2, for updating LRU and dirty bit
@@ -191,7 +191,7 @@ bool S, int set_size1, int tag_size1, Cache& L1){
 	}
 
 	if(S){// Perform snoop logic if needed
-		//find the address to remove in l1, if it's there - remove it
+		//find the address to remove in L1, if it's there - remove it
 		unsigned int set_l1 = find_set(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size1);
 		unsigned int tag_l1 = find_tag(address_to_remove->Address_bin, address_to_remove->Offset_size, set_size1, tag_size1);
 		Cache* curr_L1 = L1.get_cache();
@@ -217,8 +217,9 @@ return smallest_way; // Return the way where the victim was removed
 
 /* gets a cache, set and tag, and a flag "D" for dirty, find the address in cache and updates it timestemp. Only for existing addresses*/
 int update_timestamp(Cache& cache, unsigned int set, unsigned int tag, bool D) {
-    Address* address_pointer= address_exists(cache, set, tag);
     Cache* curr_cache = cache.get_cache();
+	Address* address_pointer= address_exists(cache, set, tag);
+	// what if address_pointer is a nullptr - probably won't happen
 	curr_cache->CounterTime++;
 	//printf("curr_cache->CounterTime: %d \n", cache->CounterTime);
 	address_pointer->Last_seen = curr_cache->CounterTime;
@@ -234,6 +235,7 @@ unsigned int find_tag(int address_in_binary, int offset_size, int set_size, int 
 	uint64_t  tag_mask = ((1ULL<<32)-1) ^ ((1ULL << offset_size+set_size) - 1);
 	// extracting the matching componenets and assigning them to the class 
 	unsigned int tag = address_in_binary & tag_mask;
+	return tag;
 }
 
 unsigned int find_set(int address_in_binary, int offset_size, int set_size) {
@@ -242,6 +244,7 @@ unsigned int find_set(int address_in_binary, int offset_size, int set_size) {
 	uint64_t  set_mask = ((1ULL << offset_size+set_size) - 1) ^ ((1ULL << offset_size) - 1);
 	// extracting the matching componenets and assigning them to the class 
 	unsigned int set = address_in_binary & set_mask;
+	return set;
 }
 
 
