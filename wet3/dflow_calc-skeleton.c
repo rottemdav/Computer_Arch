@@ -3,23 +3,124 @@
 
 #include "dflow_calc.h"
 
+struct Inst{
+int depend1;
+int depend2;
+int id;
+int depth;
+int late; //latency of the inst
+} typedef Inst;
+
+struct DependGraph{
+Inst* depend_arr;
+int* written_last;
+int longest_path;
+int num_of_insts;
+} typedef DependGraph;
+
+
+
 ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
-    return PROG_CTX_NULL;
+    int curr_longest_path = -1 ;
+    DependGraph* graph = (DependGraph*)malloc(sizeof(DependGraph));
+    // initialize depend_arr and written_last
+    graph->depend_arr = (Inst*)(malloc(sizeof(Inst)*numOfInsts));
+    graph->written_last = (int*)(malloc(sizeof(int)*numOfInsts));
+    
+    for (int i=0; i<numOfInsts; i++){
+        graph->written_last[i] = -1;
+    }
+    graph->num_of_insts = numOfInsts;
+    for(int i=0; i<numOfInsts; i++){
+        InstInfo curr_inst = progTrace[i];
+        unsigned int opcode = curr_inst.opcode;
+        unsigned int dst = curr_inst.dstIdx;
+        unsigned int src1 = curr_inst.src1Idx;
+        unsigned int src2 = curr_inst.src2Idx;
+        
+        int depend1 = -1;
+        int depend2 = -1;
+        
+        int path1_len=0;
+        int path2_len=0;
+        // checks if there is a prev inst that written to src1 or src2 -> dependent
+        for (int j=0; j<numOfInsts; j++){
+            if(graph->written_last[j] == src1){
+                depend1 = j;
+            }
+            if(graph->written_last[j] == src2){
+                depend2 = j;
+            }
+        }
+        // enter dst to written_last as the most update access to this reg
+        for (int j=0;j<numOfInsts;j++){
+            if(graph->written_last[j] == dst){
+                graph->written_last[j] = -1;
+            }
+        }
+        graph->written_last[i] = dst;
+
+        //calculate pathes length
+        if(depend1 != -1){//there is a dependent ints
+            path1_len = graph->depend_arr[depend1].depth + opsLatency[depend1];
+        }
+        if(depend2 != -1){
+            path2_len = graph->depend_arr[depend2].depth + opsLatency[depend2];
+        }
+
+        //updates data in the depend_arr[i]
+        graph->depend_arr[i].depend1 = depend1;
+        graph->depend_arr[i].depend2 = depend2;
+        graph->depend_arr[i].id = i;
+        //choose the maximum len and set to depend_arr, 
+        //if the inst has no dependencies, this lines will initilize graph->depend_arr[i].depth=0 as we want
+        if(path1_len>path2_len){ 
+            graph->depend_arr[i].depth = path1_len;
+        } else {
+            graph->depend_arr[i].depth = path2_len;
+        }
+        graph->depend_arr[i].late = opsLatency[i];
+
+        if (graph->depend_arr[i].depth > curr_longest_path) {
+            curr_longest_path = graph->depend_arr[i].depth;
+        }
+    }
+    
+    graph->longest_path = curr_longest_path;
+    /* PROBABLY NEED TO CHANGE THIS RETURN ADD*/
+    //return PROG_CTX_NULL; 
+    return (ProgCtx)graph;
 }
 
 void freeProgCtx(ProgCtx ctx) {
+    DependGraph* graph = (DependGraph*)ctx;
+    // free every pointer in arrays
+    free(graph->written_last);
+    free(graph->depend_arr);
+    free(graph);
 }
 
 int getInstDepth(ProgCtx ctx, unsigned int theInst) {
-    return -1;
+    DependGraph* graph = (DependGraph*)ctx;
+    if((theInst <= graph->num_of_insts) && (theInst >= 0)){
+        return graph->depend_arr[theInst].depth;
+    }
+    return -1; //invalid instruction number
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
+    DependGraph* graph = (DependGraph*)ctx;
+    if((theInst <= graph->num_of_insts) && (theInst >= 0)){
+        *src1DepInst = graph->depend_arr[theInst].depend1;
+        *src2DepInst = graph->depend_arr[theInst].depend2;
+        return 0;
+    }
     return -1;
 }
 
 int getProgDepth(ProgCtx ctx) {
-    return 0;
+    DependGraph* graph = (DependGraph*)ctx;
+    return graph->longest_path;
 }
 
 
