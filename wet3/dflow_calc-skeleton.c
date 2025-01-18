@@ -8,7 +8,7 @@ int depend1;
 int depend2;
 int id;
 int depth;
-int late; //latency of the inst
+int type; //latency of the inst
 } typedef Inst;
 
 struct DependGraph{
@@ -62,10 +62,12 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
 
         //calculate pathes length
         if(depend1 != -1){//there is a dependent ints
-            path1_len = graph->depend_arr[depend1].depth + opsLatency[depend1];
+            int depend1_type = graph->depend_arr[depend1].type;
+            path1_len = graph->depend_arr[depend1].depth + opsLatency[depend1_type];
         }
         if(depend2 != -1){
-            path2_len = graph->depend_arr[depend2].depth + opsLatency[depend2];
+            int depend2_type = graph->depend_arr[depend2].type;
+            path2_len = graph->depend_arr[depend2].depth + opsLatency[depend2_type];
         }
 
         //updates data in the depend_arr[i]
@@ -79,7 +81,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
         } else {
             graph->depend_arr[i].depth = path2_len;
         }
-        graph->depend_arr[i].late = opsLatency[i];
+        graph->depend_arr[i].type = opcode;
 
         if (graph->depend_arr[i].depth > curr_longest_path) {
             curr_longest_path = graph->depend_arr[i].depth;
