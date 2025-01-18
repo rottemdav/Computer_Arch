@@ -1,0 +1,1 @@
+./dflow_calc tests/test95.dat tests/test95.in d176 p118 d90 p63 d29 p176 p119 p4 p173 p78 d137 d34 p157 p65 d143 d198 d113 p157 p42 p60 p15 p60 p179 d178 p45 p48 d100 d38 d167 d22 p166 p14 d170 p65 p190 d129 p44 p67 d104

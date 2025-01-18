@@ -1,0 +1,1 @@
+./dflow_calc tests/test386.dat tests/test386.in p74 d64 d8 p15 d75 d198 p1 d194 d57 p97 p184 p132 p2 p162 p115 d172 d119 d191 d59 d18 p192 p155 p115 d98 d26 p111 p128 d40 d155 p6 p132 d171 d62 d188 d137 p92 p103 d172

@@ -1,0 +1,33 @@
+Reading the opcodes latency info from tests/test56.dat ... Got latency for 9 opcodes
+Reading the program file tests/test56.in ... Found 200 instructions
+getProgDepth()==221
+getDepDepth(188)==138
+getInstDeps(20)=={7,-1}
+getDepDepth(109)==106
+getInstDeps(72)=={29,63}
+getInstDeps(19)=={1,12}
+getDepDepth(48)==43
+getDepDepth(191)==209
+getDepDepth(5)==0
+getInstDeps(37)=={-1,8}
+getDepDepth(150)==136
+getInstDeps(110)=={85,96}
+getInstDeps(114)=={97,112}
+getInstDeps(158)=={156,155}
+getDepDepth(174)==166
+getInstDeps(188)=={151,169}
+getInstDeps(89)=={84,78}
+getInstDeps(119)=={118,116}
+getDepDepth(138)==103
+getDepDepth(60)==37
+getInstDeps(77)=={37,56}
+getInstDeps(155)=={130,147}
+getInstDeps(82)=={-1,60}
+getInstDeps(120)=={59,-1}
+getInstDeps(76)=={65,58}
+getInstDeps(69)=={60,7}
+getDepDepth(83)==60
+getDepDepth(165)==151
+getInstDeps(31)=={18,-1}
+getInstDeps(84)=={65,77}
+getDepDepth(65)==37

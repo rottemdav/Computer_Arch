@@ -1,0 +1,35 @@
+Reading the opcodes latency info from tests/test184.dat ... Got latency for 9 opcodes
+Reading the program file tests/test184.in ... Found 200 instructions
+getProgDepth()==250
+getInstDeps(189)=={173,162}
+getInstDeps(166)=={117,94}
+getInstDeps(176)=={120,166}
+getDepDepth(3)==0
+getDepDepth(5)==0
+getDepDepth(98)==108
+getDepDepth(36)==26
+getDepDepth(117)==122
+getInstDeps(66)=={55,65}
+getInstDeps(95)=={94,64}
+getDepDepth(184)==218
+getDepDepth(51)==78
+getInstDeps(21)=={10,-1}
+getDepDepth(166)==134
+getDepDepth(113)==123
+getInstDeps(82)=={28,65}
+getDepDepth(189)==176
+getDepDepth(191)==223
+getDepDepth(77)==58
+getDepDepth(41)==32
+getInstDeps(15)=={-1,-1}
+getInstDeps(163)=={134,134}
+getDepDepth(179)==224
+getDepDepth(3)==0
+getInstDeps(60)=={-1,32}
+getDepDepth(139)==133
+getDepDepth(93)==125
+getDepDepth(20)==30
+getInstDeps(191)=={186,162}
+getInstDeps(81)=={72,-1}
+getDepDepth(171)==195
+getInstDeps(55)=={-1,54}
