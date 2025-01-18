@@ -22,6 +22,7 @@ int num_of_insts;
 
 ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
     int curr_longest_path = -1 ;
+    int curr_longest_type = -1;
     DependGraph* graph = (DependGraph*)malloc(sizeof(DependGraph));
     // initialize depend_arr and written_last
     graph->depend_arr = (Inst*)(malloc(sizeof(Inst)*numOfInsts));
@@ -85,10 +86,11 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
 
         if (graph->depend_arr[i].depth > curr_longest_path) {
             curr_longest_path = graph->depend_arr[i].depth;
+            curr_longest_type = graph->depend_arr[i].type;
         }
     }
     
-    graph->longest_path = curr_longest_path;
+    graph->longest_path = curr_longest_path + opsLatency[curr_longest_type];
     /* PROBABLY NEED TO CHANGE THIS RETURN ADD*/
     //return PROG_CTX_NULL; 
     return (ProgCtx)graph;
