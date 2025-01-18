@@ -1,0 +1,18 @@
+# Example 2: All instructions are dependent on the previous instruction
+# <opcode> <dst> <src1> <src2>
+4 3 2 1
+5 5 4 3
+1 7 6 5
+1 9 8 7
+3 11 10 9
+0 13 7 11
+2 15 14 13
+0 17 16 15
+0 5 13 17
+1 21 20 5
+1 23 22 21
+5 25 24 23
+3 27 25 29
+3 29 3 27
+3 31 29 5
+

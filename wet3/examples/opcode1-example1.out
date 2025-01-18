@@ -1,0 +1,11 @@
+# ./dflow_calc opcode1.dat example1.in p0 p3 p5 p7 p9 d3 d9
+Reading the opcodes latency info from opcode1.dat ... Got latency for 6 opcodes
+Reading the program file example1.in ... Found 10 instructions
+getProgDepth()==14
+getDepDepth(0)==0
+getDepDepth(3)==1
+getDepDepth(5)==8
+getDepDepth(7)==8
+getDepDepth(9)==13
+getInstDeps(3)=={0,-1}
+getInstDeps(9)=={8,7}
