@@ -1,0 +1,1 @@
+./dflow_calc tests/test294.dat tests/test294.in d195 d194 p42 p158 p59 d94 d55 p147 p49 d56 p76 d114 p120 p17 d32 d195 d20 d93 p14 p117 p23 p100 p198 d104 p128 p76 d176 p156 p136 p176 d94 p102

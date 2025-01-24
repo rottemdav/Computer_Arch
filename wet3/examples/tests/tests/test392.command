@@ -1,0 +1,1 @@
+./dflow_calc tests/test392.dat tests/test392.in p158 p122 d143 d81 p85 d140 p92 d86 p163 d146 d26 p24 p90 d10 d24 d156 d173 d114 d18 d103 p189 d9 d162 d173 p54 d180 d66 d86 d28 d35
