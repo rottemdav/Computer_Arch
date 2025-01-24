@@ -1,6 +1,6 @@
 /* 046267 Computer Architecture - HW #3 */
 /* Implementation (skeleton)  for the dataflow statistics calculator */
-
+#include <stdio.h>
 #include "dflow_calc.h"
 
 struct Inst{
@@ -85,6 +85,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
         } else {
             graph->depend_arr[i].depth = path2_len;
         }
+      //  printf("first: depth %d\n", graph->depend_arr[i].depth);
         graph->depend_arr[i].type = opcode;
 
         /*if (graph->depend_arr[i].depth > curr_longest_path) {
@@ -93,16 +94,25 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[],
         }*/
     }
     
-    // find the longest path in the tree
+    // find the longest path in the tre
     for(int i=0; i<numOfInsts; i++){
-        if(graph->depend_arr[i].is_father){
+       // printf("is father: %d\n",graph->depend_arr[i].is_father);
+        if(graph->depend_arr[i].is_father == 1){
+           // printf("found parent\n");
             continue;
         }
-        if(graph->depend_arr[i].depth+opsLatency[graph->depend_arr[i].type] > curr_longest_path){
-            curr_longest_path = graph->depend_arr[i].depth+opsLatency[graph->depend_arr[i].type];
+        //printf("curr_longest before if: %d\n", curr_longest_path);
+       // printf("second depth: %d\n", graph->depend_arr[i].depth+opsLatency[graph->depend_arr[i].type]);
+        int temp_depth = ((graph->depend_arr[i].depth)+(opsLatency[graph->depend_arr[i].type]));
+        if(temp_depth > curr_longest_path){
+            curr_longest_path = temp_depth;
+            //printf("curr_longest_path: %d\n", curr_longest_path);
         }
+       // printf("\n");
+
 
     }
+
     graph->longest_path = curr_longest_path;
     return (ProgCtx)graph;
 }
